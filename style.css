@@ -138,3 +138,9 @@ footer{
 button:disabled{opacity:.55;cursor:not-allowed}
 #reportState{margin-top:16px;font-weight:700}
 #myRows .ghost{padding:4px 8px;margin-left:4px}
+
+.data-mode{display:flex;align-items:center;justify-content:space-between;gap:12px 20px;flex-wrap:wrap;margin:16px 20px 0;padding:10px 16px;border:1px solid var(--line);border-radius:var(--r);background:#fff}
+.data-mode p{font-size:12px;color:var(--muted)}
+.data-mode[data-demo="true"]{background:#fff4d6;border-color:#e8b671;color:#663905}
+.data-mode[data-demo="true"] p{color:#684a22}
+.data-mode[data-demo="true"] .ghost{color:#663905;border-color:#986312;background:#fffaf0}

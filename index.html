@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>داشبورد عملکرد معاونت مهندسی</title>
-<link rel="stylesheet" href="style.css?v=roles1">
+<link rel="stylesheet" href="style.css?v=demo1">
 </head>
 <body>
 
@@ -58,6 +58,12 @@
   </form>
 </dialog>
 
+<section class="data-mode" id="dataMode" aria-label="نوع داده‌های داشبورد" hidden>
+  <div><strong id="dataModeLabel">داده‌های واقعی</strong><p id="dataModeInfo">حالت آزمایشی فقط برای بررسی نمودارهاست.</p></div>
+  <button type="button" class="ghost" id="btnDemo" aria-pressed="false">نمایش داده‌های آزمایشی</button>
+  <span id="demoMsg" class="msg err" role="status"></span>
+</section>
+
 <!-- ============ فیلترها ============ -->
 <section class="filters" id="filters">
   <label>ماه
@@ -85,7 +91,7 @@
 
   <section class="grid">
     <div class="card c2">
-      <h3>روند ماهانه نفرساعت</h3>
+      <h3>روند ماهانه نفرساعت <span class="hint" id="trendDemoLabel" hidden>· مقایسهٔ داده‌های آزمایشی با شهریور واقعی</span></h3>
       <div id="chTrend" class="chart"></div>
     </div>
     <div class="card">
@@ -189,7 +195,7 @@
 
 </div><!-- /appRoot -->
 
-<script src="config.js?v=roles1"></script>
-<script src="app.js?v=roles1"></script>
+<script src="config.js?v=demo1"></script>
+<script src="app.js?v=demo1"></script>
 </body>
 </html>

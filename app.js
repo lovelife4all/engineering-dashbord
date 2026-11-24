@@ -126,12 +126,7 @@ async function loadAll(){
   const now=new Intl.DateTimeFormat('en-US-u-ca-persian',{year:'numeric',month:'numeric'}).formatToParts(new Date());
   const yr=Number(now.find(p=>p.type==='year').value), mo=Number(now.find(p=>p.type==='month').value);
   state.month=months.includes(state.month)?state.month:(months.at(-1)||yr*100+mo);
-  if(role!=='expert'){
-    fillSelect('#fMonth',(months.length?months:[state.month]).map(m=>({v:m,t:`${FA_MONTHS[m%100-1]} ${Math.floor(m/100)}`})),state.month);
-    const depts=[...new Set(personnel.map(p=>p.department.name_fa))].sort();
-    fillSelect('#fDept',[{v:'',t:'همه'},...depts.map(d=>({v:d,t:d}))],state.dept);
-    fillSelect('#fPerson',[{v:'',t:'همه'},...personnel.map(p=>({v:p.id,t:p.employee_no?`${p.name_en} (${p.employee_no})`:p.name_en}))],state.person);
-  }
+  if(role!=='expert') fillDashboardFilters();
   if(role!=='management'){
     const year=initial?yr:Number($('#eYear').value)||yr, month=initial?mo:Number($('#eMonth').value)||mo;
     const person=role==='expert'?state.employeeId:(initial?'':$('#ePerson').value);
@@ -154,16 +149,68 @@ function fillSelect(sel, items, val){
   if(val!==undefined && val!==null) el.value=String(val);
 }
 
-/* ================= فیلترها ================= */
+/* ================= حالت آزمایشی و فیلترها ================= */
+const DEMO_MONTHS=[140501,140502,140503,140504,140505,140506];
+const dashboardData=()=>state.demo ? state.demoData : state;
+const demoPeriodLabel=m=>m===140506?'واقعی':'آزمایشی';
+function fillDashboardFilters(){
+  const {logs,personnel}=dashboardData();
+  const months=state.demo?DEMO_MONTHS:[...new Set(logs.map(l=>l.period_year*100+l.period_month))].sort((a,b)=>a-b);
+  const yearMonth=months.includes(state.month)?state.month:(months.at(-1)||state.month);
+  state.month=yearMonth;
+  fillSelect('#fMonth',(months.length?months:[state.month]).map(m=>({v:m,t:`${FA_MONTHS[m%100-1]} ${Math.floor(m/100)}${state.demo?' — '+demoPeriodLabel(m):''}`})),state.month);
+  const depts=[...new Set(personnel.map(p=>p.department.name_fa))].sort();
+  fillSelect('#fDept',[{v:'',t:'همه'},...depts.map(d=>({v:d,t:d}))],state.dept);
+  fillSelect('#fPerson',[{v:'',t:'همه'},...personnel.map(p=>({v:p.id,t:p.employee_no?`${p.name_en} (${p.employee_no})`:p.name_en}))],state.person);
+}
+function updateDemoUi(){
+  const box=$('#dataMode'), btn=$('#btnDemo');
+  box.hidden=state.tab!=='dash'||!['admin','management'].includes(state.role);
+  box.dataset.demo=String(Boolean(state.demo));
+  btn.setAttribute('aria-pressed',String(Boolean(state.demo)));
+  btn.textContent=state.demo?'بازگشت به داده‌های واقعی':'نمایش داده‌های آزمایشی';
+  $('#trendDemoLabel').hidden=!state.demo;
+  $('#dataModeLabel').textContent=state.demo?`حالت آزمایشی · ${FA_MONTHS[state.month%100-1]} ${demoPeriodLabel(state.month)}`:'داده‌های واقعی';
+  $('#dataModeInfo').textContent=state.demo?'فروردین تا مرداد ۱۴۰۵ ساختگی‌اند؛ شهریور واقعی است. از مقایسه‌های این نما برای ارزیابی عملکرد استفاده نکنید.':'حالت آزمایشی فقط برای بررسی نمودارهاست.';
+}
+function exitDemo(){
+  if(!state.demo) return;
+  state.demo=false;
+  Object.assign(state,state.realFilters);
+  state.realFilters=null;
+  fillDashboardFilters();
+  render();
+}
+async function toggleDemo(){
+  if(state.tab!=='dash'||!['admin','management'].includes(state.role)) return;
+  $('#demoMsg').textContent='';
+  if(state.demo){ exitDemo(); return; }
+  const scope=state.demoScope, role=state.role, btn=$('#btnDemo');
+  btn.disabled=true;
+  try{
+    const data=state.demoData || await rpc('kpi_demo_dashboard');
+    if(!session||scope!==state.demoScope||role!==state.role||state.tab!=='dash') return;
+    state.realFilters={month:state.month,dept:state.dept,person:state.person};
+    state.demoData=data;
+    state.demo=true;
+    state.month=140505;
+    fillDashboardFilters();
+    render();
+  }catch(e){
+    if(state.demo) exitDemo();
+    if(scope===state.demoScope) $('#demoMsg').textContent='داده‌های آزمایشی بارگذاری نشدند. دوباره تلاش کنید.';
+  }finally{ btn.disabled=false; }
+}
+
 function filtered(useMonth=true){
   const y=Math.floor(state.month/100), m=state.month%100;
-  return state.logs.filter(l=>
+  return dashboardData().logs.filter(l=>
     (!useMonth || (l.period_year===y && l.period_month===m)) &&
     (!state.dept || (l.employee && l.employee.department.name_fa===state.dept)) &&
     (!state.person || (l.employee && String(l.employee.id)===state.person)));
 }
 function roster(){ // تعداد افراد فعال (با اعمال فیلتر دپارتمان/نفر)
-  return state.personnel.filter(p=>p.active &&
+  return dashboardData().personnel.filter(p=>p.active &&
     (!state.dept || p.department.name_fa===state.dept) &&
     (!state.person || String(p.id)===state.person));
 }
@@ -268,6 +315,8 @@ function bubbles(pts){
 
 /* ================= رندر داشبورد ================= */
 function render(){
+  updateDemoUi();
+  const data=dashboardData();
   const logs=filtered(true);
   const allMonth=filtered(false);         // برای روند (همه ماه‌ها با فیلتر نفر/دپارتمان)
   const y=Math.floor(state.month/100), m=state.month%100;
@@ -281,7 +330,7 @@ function render(){
   const prevH=allMonth.filter(l=>l.period_year===py&&l.period_month===pm).reduce((a,l)=>a+Number(l.hours),0);
   const mom=prevH? (hours-prevH)/prevH*100 : null;
   const rk=roster();
-  const subm=state.submissions.filter(s=>s.period_year===y&&s.period_month===m&&s.status==='submitted')
+  const subm=data.submissions.filter(s=>s.period_year===y&&s.period_month===m&&s.status==='submitted')
               .filter(s=>!state.dept||rk.some(p=>p.id===s.employee_id))
               .filter(s=>!state.person||String(s.employee_id)===state.person);
   const subPct=rk.length? Math.round(subm.length/rk.length*100):0;
@@ -290,7 +339,7 @@ function render(){
   $('#kpiHoursD').innerHTML= prevH? `<span class="${mom>=0?'up':'down'}">${mom>=0?'▲':'▼'} ${fmt(Math.abs(mom))}%</span> <span style="color:#9aa5b8">ماه قبل: ${fmt(prevH)}</span>` : '<span style="color:#9aa5b8">ماه قبل: —</span>';
   $('#kpiMom').textContent= mom===null? '—' : (mom>=0?'+':'')+fmt(mom)+'%';
   $('#kpiMom').style.color= mom===null? '' : (mom>=0?'#12b886':'#e03131');
-  $('#kpiMomD').textContent= mom===null? 'ماه قبل داده‌ای ندارد' : `${FA_MONTHS[pm-1]} ${py}: ${fmt(prevH)} نفرساعت`;
+  $('#kpiMomD').textContent= mom===null? 'ماه قبل داده‌ای ندارد' : `${FA_MONTHS[pm-1]} ${py}${state.demo?' ('+demoPeriodLabel(py*100+pm)+')':''}: ${fmt(prevH)} نفرساعت`;
   $('#kpiPeople').textContent=fmt(people);
   $('#kpiPeopleD').textContent=`از ${rk.length} نفر کل دپارتمان(ها)`;
   $('#kpiDocs').textContent=fmt(docs);
@@ -301,8 +350,8 @@ function render(){
   // ---- روند ماهانه ----
   const byM={};
   allMonth.forEach(l=>{const k=l.period_year*100+l.period_month; byM[k]=(byM[k]||0)+Number(l.hours)});
-  const trend=Object.keys(byM).sort().map(k=>({t:FA_MONTHS[k%100-1], t2:Math.floor(k/100),
-    v:byM[k], c: Number(k)===state.month? '#1d5bd8':'#9db8ec'}));
+  const trend=(state.demo?DEMO_MONTHS:Object.keys(byM).sort().map(Number)).map(k=>({t:FA_MONTHS[k%100-1], t2:state.demo?demoPeriodLabel(k):Math.floor(k/100),
+    v:byM[k]||0, c:state.demo&&k!==140506?(k===state.month?'#ac5d06':'#cf8b35'):(k===state.month||state.demo?'#1d5bd8':'#9db8ec')}));
   $('#chTrend').innerHTML=vbar(trend);
 
   // ---- گزارش‌دهی ----
@@ -319,7 +368,7 @@ function render(){
     deptAgg[d]=(deptAgg[d]||0)+Number(l.hours);
   });
   const deptData=Object.entries(deptAgg).sort((a,b)=>b[1]-a[1]).map(([d,h])=>{
-    const head=state.personnel.filter(p=>p.active&&p.department.name_fa===d).length;
+    const head=data.personnel.filter(p=>p.active&&p.department.name_fa===d).length;
     return {t:d, v:h, sub:`ظرفیت ${fmt(head*180)} ساعت · ${head} نفر`};
   });
   $('#chDept').innerHTML=hbar(deptData,{unit:' ساعت', labelW:210, rowH:34});
@@ -355,7 +404,7 @@ function render(){
   $('#chSrc').innerHTML=donut(Object.entries(srcAgg).sort((a,b)=>b[1]-a[1]).map(([t,v])=>({t,v})),
     {center:fmt(hours), centerLabel:'نفرساعت'});
 
-  if(state.role==='admin') renderTable(logs);
+  if(state.role==='admin'&&!state.demo) renderTable(logs);
   if(state.role==='admin') renderMyRows();
 }
 
@@ -532,6 +581,9 @@ function selectTab(tab){
   if(!ROLE_TABS[state.role]?.includes(tab)) return;
   document.querySelectorAll('.tab[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
+  state.tab=tab;
+  if(tab!=='dash') exitDemo();
+  updateDemoUi();
   $('#filters').style.display=tab==='dash'||tab==='table'?'flex':'none';
   if(tab==='form') renderMyRows();
 }
@@ -547,8 +599,10 @@ async function startApp(){
   showApp();
 }
 function resetUi(){
-  Object.assign(state,{role:null,employeeId:null,ready:false,month:null,dept:'',person:'',logs:[],personnel:[],activities:[],stakeholders:[],projects:[],submissions:[]});
+  Object.assign(state,{role:null,employeeId:null,ready:false,tab:null,demo:false,demoData:null,realFilters:null,demoScope:Symbol(),month:null,dept:'',person:'',logs:[],personnel:[],activities:[],stakeholders:[],projects:[],submissions:[]});
   editing=null;
+  updateDemoUi();
+  $('#demoMsg').textContent='';
   for(const sel of ['#tblWrap','#myRows','#loadState','#whoami','#eMsg','#roleMsg','#reportState']) $(sel).textContent='';
   document.querySelectorAll('.chart,.kpi-v,.kpi-d').forEach(el=>el.textContent='');
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));
@@ -560,6 +614,7 @@ function resetUi(){
 
 document.addEventListener('DOMContentLoaded', ()=>{
   document.querySelectorAll('.tab[data-tab]').forEach(b=>b.onclick=()=>selectTab(b.dataset.tab));
+  $('#btnDemo').onclick=toggleDemo;
   $('#fMonth').onchange=e=>{ state.month=+e.target.value; render(); };
   $('#fDept').onchange=e=>{ state.dept=e.target.value; render(); };
   $('#fPerson').onchange=e=>{ state.person=e.target.value; render(); };
