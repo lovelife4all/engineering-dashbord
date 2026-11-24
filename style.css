@@ -103,4 +103,38 @@ tr:hover td{background:#f8fbff}
 footer{
   text-align:center;color:var(--muted);font-size:12px;padding:18px;
 }
+
+/* ===== احراز هویت ===== */
+.who{display:flex;align-items:center;gap:10px}
+.whoami{font-size:12.5px;background:rgba(255,255,255,.14);padding:5px 12px;border-radius:8px;
+  max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.auth-screen{
+  position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(1200px 600px at 80% -10%,#2a63e8 0%,transparent 55%),
+             radial-gradient(900px 500px at -10% 110%,#12b886 0%,transparent 50%),
+             #0e1c33;
+  padding:20px;
+}
+.auth-card{
+  background:#fff;border-radius:18px;padding:34px 30px;width:100%;max-width:390px;
+  box-shadow:0 24px 60px rgba(0,0,0,.35);text-align:center;
+}
+.auth-logo{font-size:34px;background:#eef4ff;color:var(--brand);border-radius:12px;
+  width:64px;height:64px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+.auth-card h2{font-size:17px;margin-bottom:4px}
+.auth-sub{color:var(--muted);font-size:13px;margin-bottom:20px}
+.auth-card label{display:flex;flex-direction:column;gap:5px;text-align:right;font-size:12.5px;
+  color:var(--muted);margin-bottom:12px}
+.auth-card input{width:100%}
+.auth-btn{width:100%;margin-top:6px;padding:11px}
+.auth-note{font-size:11.5px;color:#9aa5b8;margin-top:14px;line-height:1.9}
 @media(max-width:980px){.grid{grid-template-columns:1fr}.card.c2{grid-column:span 1}}
+
+#passwordDialog{border:0;margin:auto;max-width:min(390px,calc(100% - 32px));text-align:right}
+#passwordDialog::backdrop{background:rgba(14,28,51,.68)}
+#passwordTitle{margin-bottom:16px}
+
+[hidden]{display:none!important}
+button:disabled{opacity:.55;cursor:not-allowed}
+#reportState{margin-top:16px;font-weight:700}
+#myRows .ghost{padding:4px 8px;margin-left:4px}

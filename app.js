@@ -14,46 +14,139 @@ const fmt = n => (Math.round(n*100)/100).toLocaleString('en-US');
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 const BASE = (window.SUPA && window.SUPA.url) ? window.SUPA.url : '/api/';
+const AUTH_BASE = (window.SUPA && window.SUPA.url) ? window.SUPA.url.replace('/rest/v1/', '/auth/v1/') : '/auth/';
+const PUB_KEY = (window.SUPA && window.SUPA.key) ? window.SUPA.key : null;
+
+/* ================= احراز هویت ================= */
+let session = null;
+function saveSession(s){ session=s; try{ localStorage.setItem('engkpi_session', JSON.stringify(s)); }catch(e){} }
+function clearSession(){ session=null; try{ localStorage.removeItem('engkpi_session'); }catch(e){} }
+
+async function authFetch(path, body, method, token){
+  const h = {'Content-Type':'application/json'};
+  if(PUB_KEY) h['apikey'] = PUB_KEY;
+  if(token) h['Authorization'] = 'Bearer ' + token;
+  const r = await fetch(AUTH_BASE + path, {method: method||'POST', headers: h,
+    body: body ? JSON.stringify(body) : undefined});
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error_description || j.msg || j.message || j.error || ('خطای ' + r.status));
+  return j;
+}
+async function login(email, password){
+  const s = await authFetch('token?grant_type=password', {email, password});
+  saveSession({access_token: s.access_token, refresh_token: s.refresh_token,
+               email: email});
+}
+async function tryRefresh(){
+  if(!session || !session.refresh_token) return false;
+  try{
+    const s = await authFetch('token?grant_type=refresh_token', {refresh_token: session.refresh_token});
+    saveSession({access_token: s.access_token, refresh_token: s.refresh_token, email: session.email});
+    return true;
+  }catch(e){ clearSession(); return false; }
+}
+async function restoreSession(){
+  let raw; try{ raw = localStorage.getItem('engkpi_session'); }catch(e){ return false; }
+  if(!raw) return false;
+  try{ session = JSON.parse(raw); }catch(e){ clearSession(); return false; }
+  try{
+    const u = await authFetch('user', null, 'GET', session.access_token);
+    session.email = u.email || session.email;
+    saveSession(session);
+    return true;
+  }catch(e){
+    return await tryRefresh();
+  }
+}
+async function logout(){
+  try{ await authFetch('logout', null, 'POST', session && session.access_token); }catch(e){}
+  clearSession();
+  showLogin();
+  resetUi();
+}
+function showLogin(){
+  $('#authScreen').style.display = 'flex';
+  $('#appRoot').style.display = 'none';
+}
+function showApp(){
+  $('#authScreen').style.display = 'none';
+  $('#appRoot').style.display = 'block';
+  $('#whoami').textContent = `${ROLE_LABEL[state.role]} · ${session.email}`;
+}
+
 async function api(path, opts={}){
   opts.headers = Object.assign({}, opts.headers||{});
-  if(window.SUPA){ // حالت مستقیم (مثلاً GitHub Pages) — کلید publishable سمت کلاینت
-    opts.headers['apikey']=window.SUPA.key;
-    opts.headers['Authorization']='Bearer '+window.SUPA.key;
+  if(PUB_KEY) opts.headers['apikey'] = PUB_KEY;
+  if(session && session.access_token) opts.headers['Authorization'] = 'Bearer ' + session.access_token;
+  let r = await fetch(BASE + path, opts);
+  if(r.status === 401 && await tryRefresh()){          // رفرش خودکار توکن
+    opts.headers['Authorization'] = 'Bearer ' + session.access_token;
+    r = await fetch(BASE + path, opts);
   }
-  const r = await fetch(BASE+path, opts);
+  if(r.status === 401){ showLogin(); throw new Error('لطفاً دوباره وارد شوید'); }
   if(!r.ok){ let t=''; try{t=(await r.json()).message||''}catch(e){}; throw new Error(r.status+' '+t); }
   const t = await r.text(); return t? JSON.parse(t): null;
 }
 
-/* ================= بارگذاری اولیه ================= */
+/* ================= بارگذاری بر اساس نقش ================= */
+const ROLE_LABEL={admin:'ادمین',management:'مدیریت',expert:'کارشناس'};
+const ROLE_TABS={admin:['dash','form','table','accounts'],management:['dash'],expert:['form']};
+function rpc(name, payload={}){
+  return api('rpc/'+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+}
+async function allPages(path){
+  const sep=path.includes('?')?'&':'?';
+  const rows=[];
+  for(let offset=0;;offset+=500){
+    const page=await api(`${path}${sep}offset=${offset}&limit=500`);
+    rows.push(...page);
+    if(page.length<500) return rows;
+  }
+}
 async function loadAll(){
-  const [logs, personnel, activities, stakeholders, projects, submissions] = await Promise.all([
-    api(`activity_logs?select=id,period_year,period_month,hours,doc_count,source,letter_date,notes,`+
-        `employee:personnel(id,employee_no,name_en,department_id,department:departments(name_fa)),`+
-        `activity:activities(general_fa,specific_title,effort_score,value_score,avg_hours_doc),`+
-        `stakeholder:stakeholders(name_fa),project:projects(name_fa)&order=period_year,period_month`),
-    api(`personnel?select=id,employee_no,name_en,active,department_id,discipline_code,department:departments(name_fa)`),
-    api(`activities?select=id,general_fa,specific_title,effort_score,value_score,avg_hours_doc&order=general_fa`),
-    api(`stakeholders?select=id,name_fa&order=name_fa`),
-    api(`projects?select=id,name_fa&order=name_fa`),
-    api(`monthly_submissions?select=employee_id,period_year,period_month,status`),
-  ]);
-  state.logs=logs; state.personnel=personnel; state.activities=activities;
-  state.stakeholders=stakeholders; state.projects=projects; state.submissions=submissions;
-
-  const months = [...new Set(logs.map(l=>l.period_year*100+l.period_month))].sort((a,b)=>a-b);
-  state.month = months[months.length-1] || 1405*100+6;
-
-  fillSelect('#fMonth', months.map(m=>({v:m, t:`${FA_MONTHS[m%100-1]} ${Math.floor(m/100)}`})), state.month);
-  fillSelect('#eMonth', FA_MONTHS.map((m,i)=>({v:i+1, t:m})), state.month%100);
-  const depts=[...new Set(personnel.map(p=>p.department.name_fa))].sort();
-  fillSelect('#fDept', [{v:'',t:'همه'}].concat(depts.map(d=>({v:d,t:d}))), '');
-  fillSelect('#fPerson', [{v:'',t:'همه'}].concat(personnel.map(p=>({v:String(p.id), t:`${p.name_en} (${p.employee_no})`}))), '');
-  fillSelect('#ePerson', personnel.filter(p=>p.active).map(p=>({v:String(p.id), t:`${p.name_en} (${p.employee_no}) — ${p.department.name_fa}`})), '');
-  fillSelect('#eStake', stakeholders.map(s=>({v:String(s.id), t:s.name_fa})), '');
-  fillSelect('#eProject', [{v:'',t:'—'}].concat(projects.map(p=>({v:String(p.id), t:p.name_fa}))), '');
-  refreshActivities();
-  $('#loadState').textContent = `${fmt(logs.length)} رویداد · ${personnel.length} نفر · آخرین ماه: ${FA_MONTHS[state.month%100-1]} ${Math.floor(state.month/100)}`;
+  const role=state.role, initial=!state.ready;
+  let data;
+  if(role==='management') data=await rpc('kpi_dashboard');
+  else if(role==='expert') data=await rpc('kpi_expert_form');
+  else if(role==='admin') {
+    const [logs,personnel,activities,stakeholders,projects,submissions]=await Promise.all([
+      allPages('activity_logs?select=id,period_year,period_month,hours,doc_count,source,letter_date,notes,activity_id,stakeholder_id,project_id,employee:personnel(id,department:departments(name_fa),name_en),activity:activities(general_fa,specific_title,effort_score,value_score),stakeholder:stakeholders(name_fa)&order=id'),
+      allPages('personnel?select=id,employee_no,name_en,active,department:departments(name_fa)&order=name_en,id'),
+      allPages('activities?select=id,general_fa,specific_title,effort_score,value_score,avg_hours_doc&order=general_fa,id'),
+      allPages('stakeholders?select=id,name_fa&order=name_fa,id'),
+      allPages('projects?select=id,name_fa&order=name_fa,id'),
+      allPages('monthly_submissions?select=employee_id,period_year,period_month,status&order=id'),
+    ]);
+    data={logs,personnel,activities,stakeholders,projects,submissions};
+  } else throw new Error('برای این حساب هنوز نقشی تعیین نشده است. با ادمین تماس بگیرید.');
+  if(!session || state.role!==role) return;
+  const {logs,personnel,activities=[],stakeholders=[],projects=[],submissions}=data;
+  Object.assign(state,{logs,personnel,activities,stakeholders,projects,submissions});
+  const months=[...new Set(logs.map(l=>l.period_year*100+l.period_month))].sort((a,b)=>a-b);
+  const now=new Intl.DateTimeFormat('en-US-u-ca-persian',{year:'numeric',month:'numeric'}).formatToParts(new Date());
+  const yr=Number(now.find(p=>p.type==='year').value), mo=Number(now.find(p=>p.type==='month').value);
+  state.month=months.includes(state.month)?state.month:(months.at(-1)||yr*100+mo);
+  if(role!=='expert'){
+    fillSelect('#fMonth',(months.length?months:[state.month]).map(m=>({v:m,t:`${FA_MONTHS[m%100-1]} ${Math.floor(m/100)}`})),state.month);
+    const depts=[...new Set(personnel.map(p=>p.department.name_fa))].sort();
+    fillSelect('#fDept',[{v:'',t:'همه'},...depts.map(d=>({v:d,t:d}))],state.dept);
+    fillSelect('#fPerson',[{v:'',t:'همه'},...personnel.map(p=>({v:p.id,t:p.employee_no?`${p.name_en} (${p.employee_no})`:p.name_en}))],state.person);
+  }
+  if(role!=='management'){
+    const year=initial?yr:Number($('#eYear').value)||yr, month=initial?mo:Number($('#eMonth').value)||mo;
+    const person=role==='expert'?state.employeeId:(initial?'':$('#ePerson').value);
+    const years=[...new Set([yr-1,yr,yr+1,year,...months.map(m=>Math.floor(m/100)),...submissions.map(s=>s.period_year)])].sort((a,b)=>a-b);
+    fillSelect('#eYear',years.map(v=>({v,t:v})),year);
+    fillSelect('#eMonth',FA_MONTHS.map((t,i)=>({v:i+1,t})),month);
+    fillSelect('#ePerson',[...(role==='admin'?[{v:'',t:'انتخاب کارشناس'}]:[]),...personnel.map(p=>({v:p.id,t:`${p.name_en} (${p.employee_no}) — ${p.department.name_fa}`}))],person);
+    $('#ePerson').disabled=role==='expert';
+    fillSelect('#eStake',[{v:'',t:'—'},...stakeholders.map(s=>({v:s.id,t:s.name_fa}))],initial?'':$('#eStake').value);
+    fillSelect('#eProject',[{v:'',t:'—'},...projects.map(p=>({v:p.id,t:p.name_fa}))],initial?'':$('#eProject').value);
+    refreshActivities();
+  }
+  state.ready=true;
+  const n=logs.reduce((sum,l)=>sum+(l.event_count??1),0);
+  $('#loadState').textContent=role==='expert'?'فرم گزارش ماهانهٔ شما':`${fmt(n)} رویداد · ${personnel.length} نفر`;
 }
 
 function fillSelect(sel, items, val){
@@ -262,8 +355,8 @@ function render(){
   $('#chSrc').innerHTML=donut(Object.entries(srcAgg).sort((a,b)=>b[1]-a[1]).map(([t,v])=>({t,v})),
     {center:fmt(hours), centerLabel:'نفرساعت'});
 
-  renderTable(logs);
-  renderMyRows();
+  if(state.role==='admin') renderTable(logs);
+  if(state.role==='admin') renderMyRows();
 }
 
 /* ================= جدول ================= */
@@ -337,71 +430,94 @@ function j2g_exact(Jy,Jm,Jd){
   return `${String(gy).padStart(4,'0')}-${String(gm).padStart(2,'0')}-${String(gd).padStart(2,'0')}`;
 }
 
-async function submitLog(){
-  const msg=$('#eMsg'); msg.className='msg'; msg.textContent='';
+let editing=null, reportBusy=false;
+const formFields=['#eSource','#eActivity','#eStake','#eProject','#eHours','#eDocs','#eDay','#eMon','#eYearD','#eNotes'];
+function reportPeriod(){ return {p_employee:Number($('#ePerson').value)||null,p_year:Number($('#eYear').value),p_month:Number($('#eMonth').value)}; }
+function clearEntry(){
+  editing=null;
+  for(const s of ['#eHours','#eDocs','#eDay','#eMon','#eYearD','#eNotes','#eStake','#eProject']) $(s).value='';
+  $('#eSource').value='pargar'; refreshActivities();
+}
+function reportMsg(text,error=false){ const el=$('#eMsg'); el.className='msg '+(error?'err':'ok'); el.textContent=text; }
+async function runReport(action, extra, success){
+  if(reportBusy) return;
+  reportBusy=true; renderMyRows(); reportMsg('');
   try{
-    const eid=$('#ePerson').value, aid=$('#eActivity').value;
-    if(!eid||!aid) throw new Error('کارشناس و فعالیت را انتخاب کنید');
-    const hours=Number($('#eHours').value||0), docs=Number($('#eDocs').value||0);
-    if(hours<=0 && docs<=0) throw new Error('نفرساعت یا تعداد را وارد کنید');
-    let ldate=null;
-    const d=+$('#eDay').value, mo=+$('#eMon').value, yy=+$('#eYearD').value;
-    if(d&&mo&&yy) ldate=j2g_exact(yy,mo,d);
-    const body={
-      period_year:+$('#eYear').value, period_month:+$('#eMonth').value,
-      employee_id:+eid, activity_id:+aid, source:$('#eSource').value,
-      stakeholder_id:$('#eStake').value? +$('#eStake').value : null,
-      project_id:$('#eProject').value? +$('#eProject').value : null,
-      hours, doc_count:docs, letter_date:ldate, notes:$('#eNotes').value||null,
-    };
-    await api('activity_logs', {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify([body])});
-    // ثبت خودکار وضعیت گزارش ماه
+    await rpc('kpi_report_action',{p_action:action,...reportPeriod(),...extra});
+    clearEntry();
     try{
-      await api(`monthly_submissions?on_conflict=employee_id,period_year,period_month`,
-        {method:'POST', headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},
-         body:JSON.stringify([{employee_id:+eid, period_year:body.period_year, period_month:body.period_month,
-           status:'submitted', submitted_at:new Date().toISOString()}])});
-    }catch(e){}
-    msg.className='msg ok'; msg.textContent='✅ با موفقیت ثبت شد';
-    $('#eHours').value=''; $('#eDocs').value=''; $('#eNotes').value='';
-    $('#eDay').value=''; $('#eMon').value=''; $('#eYearD').value='';
-    await loadAll(); syncFilters(); render();
-  }catch(e){ msg.className='msg err'; msg.textContent='❌ '+e.message; }
+      await loadAll();
+      if(state.role==='admin') render();
+      reportMsg(success);
+    }catch(e){ reportMsg(success+' برای دریافت وضعیت جدید، صفحه را تازه کنید.',true); }
+  }catch(e){ reportMsg(e.message,true); }
+  finally{ reportBusy=false; renderMyRows(); }
 }
-
-async function submitMonthStatus(){
-  const msg=$('#eMsg'); msg.className='msg'; msg.textContent='';
+async function submitLog(){
   try{
-    const eid=$('#ePerson').value; if(!eid) throw new Error('اول خودتان را انتخاب کنید');
-    await api(`monthly_submissions?on_conflict=employee_id,period_year,period_month`,
-      {method:'POST', headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},
-       body:JSON.stringify([{employee_id:+eid, period_year:+$('#eYear').value,
-         period_month:+$('#eMonth').value, status:'submitted', submitted_at:new Date().toISOString()}])});
-    msg.className='msg ok'; msg.textContent='✅ وضعیت «گزارش ماه» ثبت شد';
-    await loadAll(); syncFilters(); render();
-  }catch(e){ msg.className='msg err'; msg.textContent='❌ '+e.message; }
+    const aid=Number($('#eActivity').value), hours=Number($('#eHours').value||0), docs=Number($('#eDocs').value||0);
+    if(!reportPeriod().p_employee || !aid) throw new Error('کارشناس و فعالیت را انتخاب کنید.');
+    if(!Number.isFinite(hours)||hours<0||!Number.isInteger(docs)||docs<0||(hours===0&&docs===0)) throw new Error('نفرساعت یا تعداد معتبر وارد کنید.');
+    const d=+$('#eDay').value, mo=+$('#eMon').value, yy=+$('#eYearD').value;
+    if((d||mo||yy)&&(![d,mo,yy].every(Number.isInteger)||d<1||d>31||mo<1||mo>12||yy<1300||yy>1500)) throw new Error('تاریخ نامه را کامل و معتبر وارد کنید.');
+    let date=null;
+    if(d&&mo&&yy){
+      date=j2g_exact(yy,mo,d);
+      const [yd,md,dd]=persianParts(date);
+      if(yd!==yy||md!==mo||dd!==d) throw new Error('تاریخ نامه معتبر نیست.');
+    }
+    await runReport('save',{p_id:editing,p_entry:{activity_id:aid,source:$('#eSource').value,
+      stakeholder_id:Number($('#eStake').value)||null,project_id:Number($('#eProject').value)||null,
+      hours,doc_count:docs,letter_date:date,notes:$('#eNotes').value||null}},'فعالیت در پیش‌نویس ذخیره شد.');
+  }catch(e){ reportMsg(e.message,true); }
 }
-
+const persianDay=new Intl.DateTimeFormat('en-US-u-ca-persian',{timeZone:'UTC',year:'numeric',month:'numeric',day:'numeric'});
+function persianParts(iso){
+  const parts=persianDay.formatToParts(new Date(iso+'T12:00:00Z'));
+  return ['year','month','day'].map(key=>Number(parts.find(p=>p.type===key).value));
+}
+function editEntry(l){
+  clearEntry(); editing=l.id;
+  $('#eSource').value=l.source; refreshActivities();
+  for(const [sel,list,id] of [['#eActivity',state.activities,l.activity_id],['#eStake',state.stakeholders,l.stakeholder_id],['#eProject',state.projects,l.project_id]]){
+    if(id!=null && ![...$(sel).options].some(o=>Number(o.value)===id)){
+      const item=list.find(i=>i.id===id);
+      $(sel).add(new Option(item?.name_fa||item?.specific_title||item?.general_fa||'گزینهٔ قبلی',id));
+    }
+    $(sel).value=id??'';
+  }
+  $('#eHours').value=l.hours; $('#eDocs').value=l.doc_count; $('#eNotes').value=l.notes||'';
+  if(l.letter_date){ const [y,m,d]=persianParts(l.letter_date); $('#eDay').value=d; $('#eMon').value=m; $('#eYearD').value=y; }
+  updateHint(); renderMyRows(); $('#eHours').focus();
+}
 function renderMyRows(){
-  const eid=$('#ePerson').value, y=+$('#eYear').value, m=+$('#eMonth').value;
-  if(!eid){ $('#myRows').innerHTML=emptyBox('کارشناس را انتخاب کنید'); return; }
-  const rows=state.logs.filter(l=>l.employee&&l.employee.id===+eid&&l.period_year===y&&l.period_month===m);
-  if(!rows.length){ $('#myRows').innerHTML=emptyBox('هنوز فعالیتی ثبت نکرده‌اید'); return; }
-  let h=`<table><tr><th>منبع</th><th>فعالیت</th><th>ذینفع</th><th>نفرساعت</th><th>تعداد</th><th>تاریخ نامه</th><th></th></tr>`;
-  rows.forEach(l=>{
-    h+=`<tr><td>${esc(SRC_FA[l.source]||l.source)}</td>`+
-       `<td>${esc(l.activity? (l.activity.specific_title||l.activity.general_fa):'—')}</td>`+
-       `<td>${esc(l.stakeholder? l.stakeholder.name_fa:'—')}</td>`+
-       `<td><b>${fmt(l.hours)}</b></td><td>${fmt(l.doc_count)}</td>`+
-       `<td class="ltr">${esc(l.letter_date||'—')}</td>`+
-       `<td><button class="del" data-id="${l.id}" title="حذف">✕</button></td></tr>`;
+  if(!['admin','expert'].includes(state.role)) return;
+  const {p_employee:eid,p_year:y,p_month:m}=reportPeriod();
+  const status=state.submissions.find(s=>s.employee_id===eid&&s.period_year===y&&s.period_month===m)?.status;
+  const locked=status==='submitted';
+  const editable=Boolean(eid)&&!locked&&!reportBusy;
+  const rows=state.logs.filter(l=>l.employee?.id===eid&&l.period_year===y&&l.period_month===m);
+  $('#reportState').textContent=!eid?'ابتدا کارشناس را انتخاب کنید.':locked?'ارسال نهایی شده؛ گزارش قفل است.':status==='draft'?'پیش‌نویس؛ هنوز ارسال نهایی نشده است.':'هنوز گزارشی برای این ماه ارسال نشده است.';
+  for(const s of formFields) $(s).disabled=!editable;
+  $('#eYear').disabled=$('#eMonth').disabled=reportBusy;
+  $('#ePerson').disabled=state.role==='expert'||reportBusy;
+  $('#eSubmit').disabled=!editable;
+  $('#eSubmit').textContent=editing?'ذخیرهٔ ویرایش':'ذخیرهٔ فعالیت';
+  $('#eCancelEdit').hidden=!editing||locked;
+  $('#eCancelEdit').disabled=reportBusy;
+  $('#eSubmitMonth').disabled=!editable||!rows.length||editing!==null;
+  $('#eReopen').hidden=state.role!=='admin'||!locked;
+  $('#eReopen').disabled=reportBusy;
+  if(!rows.length){ $('#myRows').innerHTML=emptyBox(eid?'فعالیتی برای این دوره ثبت نشده است.':'کارشناس را انتخاب کنید.'); return; }
+  let h='<table><tr><th>منبع</th><th>فعالیت</th><th>ذینفع</th><th>نفرساعت</th><th>تعداد</th><th>تاریخ نامه (میلادی)</th><th></th></tr>';
+  rows.forEach((l,i)=>{
+    h+=`<tr><td>${esc(SRC_FA[l.source]||l.source)}</td><td>${esc(l.activity?.specific_title||l.activity?.general_fa||'—')}</td><td>${esc(l.stakeholder?.name_fa||'—')}</td><td>${fmt(l.hours)}</td><td>${fmt(l.doc_count)}</td><td class="ltr">${esc(l.letter_date||'—')}</td>`+
+      `<td>${editable?`<button class="ghost" data-edit="${i}">ویرایش</button><button class="del" data-delete="${i}">حذف</button>`:''}</td></tr>`;
   });
   $('#myRows').innerHTML=h+'</table>';
-  $('#myRows').querySelectorAll('.del').forEach(b=>b.onclick=async()=>{
-    if(!confirm('این ردیف حذف شود؟')) return;
-    await api('activity_logs?id=eq.'+b.dataset.id, {method:'DELETE'});
-    await loadAll(); syncFilters(); render();
+  $('#myRows').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editEntry(rows[b.dataset.edit]));
+  $('#myRows').querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>{
+    if(confirm('این فعالیت حذف شود؟')) runReport('delete',{p_id:rows[b.dataset.delete].id},'فعالیت حذف شد.');
   });
 }
 
@@ -412,19 +528,38 @@ function syncFilters(){ // حفظ مقادیر بعد از reload
   $('#fPerson').value=state.person;
 }
 
-function initTabs(){
-  document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
-    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-    document.querySelectorAll('.tabpane').forEach(x=>x.classList.remove('active'));
-    b.classList.add('active');
-    $('#tab-'+b.dataset.tab).classList.add('active');
-    $('#filters').style.display= b.dataset.tab==='form'? 'none':'flex';
-    if(b.dataset.tab==='form') renderMyRows();
-  });
+function selectTab(tab){
+  if(!ROLE_TABS[state.role]?.includes(tab)) return;
+  document.querySelectorAll('.tab[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  document.querySelectorAll('.tabpane').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
+  $('#filters').style.display=tab==='dash'||tab==='table'?'flex':'none';
+  if(tab==='form') renderMyRows();
+}
+async function startApp(){
+  resetUi();
+  const access=await rpc('kpi_access');
+  if(!Object.hasOwn(ROLE_TABS,access.role)) throw new Error('برای این حساب هنوز نقشی تعیین نشده است. با ادمین تماس بگیرید.');
+  state.role=access.role; state.employeeId=access.employee_id;
+  document.querySelectorAll('.tab[data-tab]').forEach(b=>b.hidden=!ROLE_TABS[state.role].includes(b.dataset.tab));
+  await loadAll();
+  if(state.role!=='expert') render();
+  selectTab(ROLE_TABS[state.role][0]);
+  showApp();
+}
+function resetUi(){
+  Object.assign(state,{role:null,employeeId:null,ready:false,month:null,dept:'',person:'',logs:[],personnel:[],activities:[],stakeholders:[],projects:[],submissions:[]});
+  editing=null;
+  for(const sel of ['#tblWrap','#myRows','#loadState','#whoami','#eMsg','#roleMsg','#reportState']) $(sel).textContent='';
+  document.querySelectorAll('.chart,.kpi-v,.kpi-d').forEach(el=>el.textContent='');
+  document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));
+  for(const s of ['#eHours','#eDocs','#eDay','#eMon','#eYearD','#eNotes']) $(s).value='';
+  $('#eSource').value='pargar';
+  $('#roleForm').reset();
+  $('#roleType').dispatchEvent(new Event('change'));
 }
 
-document.addEventListener('DOMContentLoaded', async()=>{
-  initTabs();
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.querySelectorAll('.tab[data-tab]').forEach(b=>b.onclick=()=>selectTab(b.dataset.tab));
   $('#fMonth').onchange=e=>{ state.month=+e.target.value; render(); };
   $('#fDept').onchange=e=>{ state.dept=e.target.value; render(); };
   $('#fPerson').onchange=e=>{ state.person=e.target.value; render(); };
@@ -432,17 +567,72 @@ document.addEventListener('DOMContentLoaded', async()=>{
   $('#eSource').onchange=refreshActivities;
   $('#eActivity').onchange=updateHint;
   $('#eDocs').onchange=applySuggestedHours;
-  $('#ePerson').onchange=renderMyRows;
-  $('#eYear').onchange=renderMyRows;
-  $('#eMonth').onchange=renderMyRows;
+  for(const sel of ['#ePerson','#eYear','#eMonth']) $(sel).onchange=()=>{ clearEntry(); reportMsg(''); renderMyRows(); };
   $('#eSubmit').onclick=submitLog;
-  $('#eSubmitMonth').onclick=submitMonthStatus;
-  try{
-    await loadAll();
-    $('#filters').style.display='flex';
-    render();
-  }catch(e){
-    $('#loadState').textContent='خطا در بارگذاری: '+e.message;
-    document.querySelectorAll('.chart').forEach(c=>c.innerHTML=emptyBox('ارتباط با سرور داده برقرار نشد'));
-  }
+  $('#eCancelEdit').onclick=()=>{ clearEntry(); renderMyRows(); };
+  $('#eSubmitMonth').onclick=()=>{
+    if(confirm('پس از ارسال نهایی، گزارش قفل می‌شود. ارسال شود؟')) runReport('submit',{},'گزارش ارسال و قفل شد.');
+  };
+  $('#eReopen').onclick=()=>{
+    if(confirm('گزارش به پیش‌نویس برگردد تا قابل اصلاح باشد؟')) runReport('reopen',{},'گزارش برای اصلاح باز شد.');
+  };
+  $('#roleType').onchange=()=>{
+    const expert=$('#roleType').value==='expert';
+    $('#roleEmployeeLabel').hidden=!expert; $('#roleEmployee').required=expert;
+  };
+  $('#roleForm').onsubmit=async e=>{
+    e.preventDefault();
+    const role=$('#roleType').value, email=$('#roleEmail').value.trim(), msg=$('#roleMsg');
+    if((role==='admin'||role==='none')&&!confirm('نقش انتخاب‌شده برای این حساب اعمال شود؟')) return;
+    $('#roleSave').disabled=true; msg.textContent='';
+    try{
+      await rpc('kpi_set_role',{p_email:email,p_role:role,p_employee_no:role==='expert'?$('#roleEmployee').value.trim():null});
+      msg.className='msg ok'; msg.textContent=role==='none'?'دسترسی حساب لغو شد.':'نقش حساب ذخیره شد.';
+    }catch(e){ msg.className='msg err'; msg.textContent=e.message; }
+    finally{ $('#roleSave').disabled=false; }
+  };
+  $('#btnLogout').onclick=logout;
+  const passwordDialog=$('#passwordDialog');
+  $('#btnPassword').onclick=()=>{
+    $('#passwordForm').reset(); $('#passwordMsg').textContent=''; passwordDialog.showModal();
+  };
+  $('#cancelPassword').onclick=()=>passwordDialog.close();
+  passwordDialog.onclose=()=>$('#passwordForm').reset();
+  $('#passwordForm').onsubmit=async e=>{
+    e.preventDefault();
+    const password=$('#newPass').value, msg=$('#passwordMsg'), button=$('#savePassword');
+    if(password!==$('#confirmPass').value){ msg.textContent='رمز جدید و تکرار آن یکسان نیستند.'; return; }
+    if(!session || !session.access_token){ passwordDialog.close(); showLogin(); return; }
+    button.disabled=true; msg.textContent='';
+    try{
+      await authFetch('user', {password}, 'PUT', session.access_token);
+      passwordDialog.close();
+      await logout();
+      $('#authMsg').className='msg ok';
+      $('#authMsg').textContent='رمز تغییر کرد. با رمز جدید وارد شوید.';
+    }catch(e){ msg.textContent='تغییر رمز انجام نشد. اگر نشست منقضی شده است، دوباره وارد شوید.'; }
+    finally{ button.disabled=false; }
+  };
+
+  $('#btnLogin').onclick=async ()=>{
+    const msg=$('#authMsg'); msg.className='msg'; msg.textContent='…';
+    if($('#btnLogin').disabled) return;
+    $('#btnLogin').disabled=true;
+    try{
+      await login($('#authEmail').value.trim(), $('#authPass').value);
+      $('#authPass').value='';
+      await startApp();
+    }catch(e){ clearSession(); showLogin(); msg.className='msg err'; msg.textContent='❌ '+e.message; }
+    finally{ $('#btnLogin').disabled=false; }
+  };
+  $('#authPass').onkeydown=e=>{ if(e.key==='Enter') $('#btnLogin').click(); };
+
+  // راه‌انداز: بازیابی نشست قبلی یا نمایش صفحه ورود
+  (async()=>{
+    try{
+      const ok=await restoreSession();
+      if(ok){ await startApp(); }
+      else { showLogin(); }
+    }catch(e){ clearSession(); showLogin(); $('#authMsg').className='msg err'; $('#authMsg').textContent=e.message; }
+  })();
 });

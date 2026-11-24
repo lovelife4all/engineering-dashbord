@@ -4,9 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>داشبورد عملکرد معاونت مهندسی</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=roles1">
 </head>
 <body>
+
+<!-- ============ صفحه ورود ============ -->
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo">▦</div>
+    <h2>داشبورد عملکرد معاونت مهندسی</h2>
+    <p class="auth-sub">برای مشاهده داشبورد و ثبت گزارش ماهانه وارد شوید</p>
+    <label>ایمیل حساب<input type="email" id="authEmail" placeholder="name@company.ir" autocomplete="email"></label>
+    <label>رمز عبور<input type="password" id="authPass" placeholder="رمز عبور" autocomplete="current-password"></label>
+    <button class="primary auth-btn" id="btnLogin">ورود</button>
+    <div id="authMsg" class="msg" style="min-height:22px"></div>
+    <p class="auth-note">حساب کاربری توسط مدیر سیستم ساخته می‌شود؛ در صورت نیاز به حساب، با مدیر تماس بگیرید.</p>
+  </div>
+</div>
+
+<div id="appRoot" style="display:none">
 
 <header class="topbar">
   <div class="brand">
@@ -20,8 +36,27 @@
     <button class="tab active" data-tab="dash">📈 داشبورد</button>
     <button class="tab" data-tab="form">📝 فرم ورود ماهانه</button>
     <button class="tab" data-tab="table">🗂 جدول داده‌ها</button>
+    <button class="tab" data-tab="accounts">حساب‌ها و نقش‌ها</button>
   </nav>
+  <div class="who">
+    <span id="whoami" class="whoami"></span>
+    <button class="tab" type="button" id="btnPassword">تغییر رمز</button>
+    <button class="tab" id="btnLogout">خروج</button>
+  </div>
 </header>
+
+<dialog id="passwordDialog" class="auth-card" aria-labelledby="passwordTitle">
+  <form id="passwordForm">
+    <h2 id="passwordTitle">تغییر رمز عبور</h2>
+    <label>رمز جدید (حداقل ۱۲ کاراکتر)<input type="password" id="newPass" minlength="12" autocomplete="new-password" required></label>
+    <label>تکرار رمز جدید<input type="password" id="confirmPass" minlength="12" autocomplete="new-password" required></label>
+    <div class="actions">
+      <button class="primary" type="submit" id="savePassword">ذخیره و ورود دوباره</button>
+      <button class="ghost" type="button" id="cancelPassword">انصراف</button>
+    </div>
+    <div id="passwordMsg" class="msg err" role="status"></div>
+  </form>
+</dialog>
 
 <!-- ============ فیلترها ============ -->
 <section class="filters" id="filters">
@@ -112,13 +147,16 @@
       </label>
       <label>توضیحات <input type="text" id="eNotes" placeholder="عنوان/توضیح (اختیاری)"></label>
     </div>
+    <p class="hint" id="reportState" aria-live="polite"></p>
     <div class="actions">
-      <button class="primary" id="eSubmit">ثبت فعالیت</button>
-      <button class="ghost" id="eSubmitMonth">✔ ثبت وضعیت «گزارش ماه» برای من</button>
+      <button class="primary" id="eSubmit">ذخیرهٔ فعالیت</button>
+      <button class="ghost" id="eCancelEdit" hidden>انصراف از ویرایش</button>
+      <button class="ghost" id="eSubmitMonth">ارسال نهایی گزارش ماه</button>
+      <button class="ghost" id="eReopen" hidden>بازگشایی گزارش</button>
       <span id="eMsg" class="msg"></span>
     </div>
 
-    <h3>فعالیت‌های ثبت‌شده توسط شما در ماه انتخابی</h3>
+    <h3>فعالیت‌های گزارش انتخابی</h3>
     <div id="myRows" class="minitable">—</div>
   </section>
 </main>
@@ -131,12 +169,27 @@
   </section>
 </main>
 
+<main id="tab-accounts" class="tabpane">
+  <section class="card formcard">
+    <h3>تعیین نقش برای حساب موجود</h3>
+    <p class="hint">ابتدا حساب شخص را در بخش Authentication پروژه بسازید. ایجاد حساب به‌تنهایی به داده‌ها دسترسی نمی‌دهد.</p>
+    <form id="roleForm" class="formgrid" autocomplete="off">
+      <label>ایمیل حساب<input type="email" required id="roleEmail"></label>
+      <label>نقش<select id="roleType"><option value="management">مدیریت</option><option value="expert">کارشناس</option><option value="admin">ادمین</option><option value="none">لغو دسترسی</option></select></label>
+      <label id="roleEmployeeLabel" hidden>کد پرسنلی<input type="text" id="roleEmployee"></label>
+      <div class="actions"><button type="submit" class="primary" id="roleSave">ذخیرهٔ نقش</button></div>
+      <span id="roleMsg" class="msg" role="status"></span>
+    </form>
+  </section>
+</main>
+
 <footer>
-  منبع داده: Supabase <code>engineering-kpi</code> · دوره: شهریور ۱۴۰۵ (۵۳۰ رویداد، ۵٬۸۴۱٫۷۷ نفرساعت) ·
-  داده تاریخی از فایل گزارش معاونت بازیابی‌شده
+  داشبورد داخلی معاونت مهندسی
 </footer>
 
-<script src="config.js"></script>
-<script src="app.js"></script>
+</div><!-- /appRoot -->
+
+<script src="config.js?v=roles1"></script>
+<script src="app.js?v=roles1"></script>
 </body>
 </html>
