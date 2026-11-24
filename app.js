@@ -236,7 +236,7 @@ function hbar(data, opt={}){
     const c=d.c||COLORS[i%COLORS.length];
     const titleTxt=d.sub ? `${d.t} — ${d.sub}: ${fmt(val)}${unit}` : `${d.t}: ${fmt(val)}${unit}`;
     const barStyle=val>0
-      ? `width:calc((100% - 104px) * ${ratio.toFixed(4)});min-width:6px;background:${c}`
+      ? `width:calc((100% - var(--hbar-val-reserve, 104px)) * ${ratio.toFixed(4)});min-width:6px;background:${c}`
       : `width:0;min-width:0;background:${c}`;
     s+=`<div class="hbar-row" title="${esc(titleTxt)}">`+
          `<div class="hbar-label">`+
@@ -821,6 +821,8 @@ async function startApp(){
   if(!Object.hasOwn(ROLE_TABS,access.role)) throw new Error('برای این حساب هنوز نقشی تعیین نشده است. با ادمین تماس بگیرید.');
   state.role=access.role; state.employeeId=access.employee_id;
   document.querySelectorAll('.tab[data-tab]').forEach(b=>b.hidden=!ROLE_TABS[state.role].includes(b.dataset.tab));
+  const tabsNav = document.querySelector('nav.tabs');
+  if(tabsNav) tabsNav.classList.toggle('single-tab', ROLE_TABS[state.role].length <= 1);
   await loadAll();
   if(state.role!=='expert') render();
   selectTab(ROLE_TABS[state.role][0]);
@@ -940,6 +942,49 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.querySelectorAll('[data-bg-choice]').forEach(btn => {
     btn.onclick = () => setBgTheme(btn.dataset.bgChoice);
   });
+
+  // وب‌اپلیکیشن قابل نصب (PWA + Service Worker + راهنمای iOS)
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  }
+  let deferredInstall = null;
+  const installBtns = [$('#btnInstall'), $('#authInstallBtn')].filter(Boolean);
+  const iosDialog = $('#iosInstallDialog');
+  const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  const isIosSafari = () => {
+    const ua = navigator.userAgent || '';
+    const isIos = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    return isIos && /safari/i.test(ua) && !/crios|fxios|edgios|opios/i.test(ua);
+  };
+  const syncInstallButtons = () => {
+    const show = !isStandalone() && (Boolean(deferredInstall) || isIosSafari());
+    installBtns.forEach(b => { b.hidden = !show; });
+  };
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredInstall = e;
+    syncInstallButtons();
+  });
+  window.addEventListener('appinstalled', () => {
+    deferredInstall = null;
+    syncInstallButtons();
+  });
+  installBtns.forEach(btn => {
+    btn.onclick = async () => {
+      if(deferredInstall){
+        deferredInstall.prompt();
+        await deferredInstall.userChoice.catch(()=>null);
+        deferredInstall = null;
+        syncInstallButtons();
+      } else if(isIosSafari() && iosDialog){
+        iosDialog.showModal();
+      }
+    };
+  });
+  if($('#iosInstallClose') && iosDialog){
+    $('#iosInstallClose').onclick = () => iosDialog.close();
+  }
+  syncInstallButtons();
 
   // راه‌انداز: بازیابی نشست قبلی یا نمایش صفحه ورود
   (async()=>{

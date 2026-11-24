@@ -2,9 +2,18 @@
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f274a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="داشبورد مهندسی">
 <title>داشبورد عملکرد معاونت مهندسی</title>
-<link rel="stylesheet" href="style.css?v=improve2">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css?v=improve3">
 </head>
 <body data-bg="blueprint">
 
@@ -24,6 +33,7 @@
     <label>ایمیل حساب<input type="email" id="authEmail" placeholder="name@company.ir" autocomplete="email"></label>
     <label>رمز عبور<input type="password" id="authPass" placeholder="رمز عبور" autocomplete="current-password"></label>
     <button class="primary auth-btn" id="btnLogin">ورود به سامانه</button>
+    <button type="button" class="ghost auth-install-btn" id="authInstallBtn" hidden>📲 نصب نسخه وب‌اپلیکیشن روی گوشی / دسکتاپ</button>
     <div id="authMsg" class="msg" style="min-height:22px"></div>
     <p class="auth-note">حساب کاربری توسط مدیر سیستم ساخته می‌شود؛ در صورت نیاز به حساب، با مدیر تماس بگیرید.</p>
   </div>
@@ -54,6 +64,7 @@
       <button type="button" class="bg-pill" data-bg-choice="energy" aria-pressed="false" title="پس‌زمینه شعله آبی و انرژی مدرن">طرح ۲: انرژی آبی</button>
     </div>
     <span id="whoami" class="whoami"></span>
+    <button class="tab install-btn" type="button" id="btnInstall" hidden>📲 نصب برنامه</button>
     <button class="tab" type="button" id="btnPassword">تغییر رمز</button>
     <button class="tab" id="btnLogout">خروج</button>
   </div>
@@ -256,9 +267,23 @@
 </footer>
 
 </div><!-- /appRoot -->
+
+<dialog id="iosInstallDialog" class="auth-card" aria-labelledby="iosInstallTitle">
+  <h2 id="iosInstallTitle">نصب اپلیکیشن روی آیفون و آیپد</h2>
+  <p class="ios-install-desc">برای نصب داشبورد مهندسی به‌صورت اپلیکیشن مستقل در iOS:</p>
+  <ol class="ios-install-steps">
+    <li>در نوار پایین یا بالای مرورگر <strong>Safari</strong> دکمه اشتراک‌گذاری (<strong>Share</strong> ⬆️) را بزنید.</li>
+    <li>گزینه <strong>Add to Home Screen</strong> (افزودن به صفحه اصلی) را انتخاب کنید.</li>
+    <li>دکمه <strong>Add</strong> را لمس کنید تا آیکون برنامه روی گوشی شما قرار بگیرد.</li>
+  </ol>
+  <div class="actions">
+    <button type="button" class="primary" id="iosInstallClose">متوجه شدم</button>
+  </div>
+</dialog>
+
 <article id="printReport" class="print-report" dir="rtl" aria-label="گزارش قابل چاپ"></article>
 
-<script src="config.js?v=improve2"></script>
-<script src="app.js?v=improve2"></script>
+<script src="config.js?v=improve3"></script>
+<script src="app.js?v=improve3"></script>
 </body>
 </html>
