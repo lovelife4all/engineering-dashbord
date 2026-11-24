@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>داشبورد عملکرد معاونت مهندسی</title>
-<link rel="stylesheet" href="style.css?v=demo1">
+<link rel="stylesheet" href="style.css?v=improve1">
 </head>
 <body>
 
@@ -37,6 +37,7 @@
     <button class="tab" data-tab="form">📝 فرم ورود ماهانه</button>
     <button class="tab" data-tab="table">🗂 جدول داده‌ها</button>
     <button class="tab" data-tab="accounts">حساب‌ها و نقش‌ها</button>
+    <button class="tab" data-tab="catalog">فهرست‌های پایه</button>
   </nav>
   <div class="who">
     <span id="whoami" class="whoami"></span>
@@ -76,6 +77,7 @@
     <select id="fPerson"><option value="">همه</option></select>
   </label>
   <button class="ghost" id="fReset">بازنشانی</button>
+  <button type="button" class="primary" id="btnPrint" hidden>چاپ گزارش</button>
 </section>
 
 <!-- ============ تب داشبورد ============ -->
@@ -105,6 +107,16 @@
     <div class="card">
       <h3>Value در مقابل Effort <span class="hint">(حجم = نفرساعت)</span></h3>
       <div id="chVE" class="chart"></div>
+    </div>
+    <div class="card c3">
+      <h3>اولویت‌بندی ارزش و تلاش</h3>
+      <p class="hint">امتیاز ۵ تا ۷ «بالا» و ۱ تا ۴ «پایین» است. سهم هر بخش از کل نفرساعت همین فیلتر محاسبه می‌شود. پیشنهادها برای بازبینی فعالیت‌اند، نه رتبه‌بندی افراد.</p>
+      <div id="priorityGrid" class="priority-grid"></div>
+    </div>
+    <div class="card c3">
+      <div class="section-head"><div><h3>تمرکز بار کاری</h3><p class="hint">سهم از کل نفرساعت محدوده، با تفکیک واحدهای درگیر</p></div>
+      <label>گروه‌بندی <select id="portfolioBy"><option value="project">پروژه</option><option value="stakeholder">ذینفع</option></select></label></div>
+      <div id="portfolioSummary" class="portfolio-summary"></div><div id="portfolioTable" class="tblwrap"></div>
     </div>
     <div class="card c2">
       <h3>نفرساعت به تفکیک فعالیت</h3>
@@ -154,6 +166,7 @@
       <label>توضیحات <input type="text" id="eNotes" placeholder="عنوان/توضیح (اختیاری)"></label>
     </div>
     <p class="hint" id="reportState" aria-live="polite"></p>
+    <p class="hint">قبل از ذخیره، ردیف مشابه، کدهای بایگانی‌شده و نفرساعت غیرعادی بررسی می‌شوند.</p>
     <div class="actions">
       <button class="primary" id="eSubmit">ذخیرهٔ فعالیت</button>
       <button class="ghost" id="eCancelEdit" hidden>انصراف از ویرایش</button>
@@ -189,13 +202,50 @@
   </section>
 </main>
 
+<main id="tab-catalog" class="tabpane">
+  <section class="card">
+    <h3>مدیریت فهرست‌های پایه</h3>
+    <p class="hint">فهرست‌های موجود حفظ شده‌اند. بایگانی، گزینه را از ثبت جدید حذف می‌کند و سوابق گزارش‌ها را نگه می‌دارد. بایگانی کارشناس دسترسی نقش کارشناسیِ متصل را هم غیرفعال می‌کند.</p>
+    <div class="catalog-toolbar">
+      <label>فهرست<select id="catKind"><option value="personnel">کارشناسان</option><option value="projects">پروژه‌ها</option><option value="stakeholders">ذینفعان</option></select></label>
+      <label>وضعیت<select id="catStatus"><option value="all">همه</option><option value="active">فعال</option><option value="archived">بایگانی‌شده</option></select></label>
+      <label>جست‌وجو<input type="search" id="catSearch" placeholder="نام، کد یا واحد"></label>
+    </div>
+    <form id="catForm" class="formgrid" autocomplete="off">
+      <label>نام<input id="catName" required maxlength="250"></label>
+      <label id="catEmployeeField">کد پرسنلی<input id="catEmployee" maxlength="40" required></label>
+      <label id="catDeptField">دپارتمان<select id="catDept" required></select></label>
+      <label id="catContractField" hidden>شماره قرارداد (اختیاری)<input id="catContract" maxlength="100"></label>
+      <label id="catStakeField" hidden>ذینفع پروژه (اختیاری)<select id="catStake"></select></label>
+      <div class="actions"><button class="primary" type="submit" id="catAdd">افزودن به فهرست</button></div>
+    </form>
+    <p id="catMsg" class="msg" role="status"></p>
+    <div id="catTable" class="tblwrap"></div>
+  </section>
+</main>
+
+<dialog id="qualityDialog" class="auth-card" aria-labelledby="qualityTitle">
+  <form id="qualityForm">
+    <h2 id="qualityTitle">بازبینی ردیف فعالیت</h2>
+    <ul id="qualityWarnings"></ul>
+    <label>اگر ردیف درست است، دلیل ثبت آن را بنویسید.
+      <textarea minlength="5" maxlength="1000" id="qualityReason" required rows="3"></textarea>
+    </label>
+    <div class="actions">
+      <button type="submit" class="primary">تأیید و ذخیره</button>
+      <button type="button" id="qualityCancel" class="ghost">بازگشت به فرم</button>
+    </div>
+  </form>
+</dialog>
+
 <footer>
   داشبورد داخلی معاونت مهندسی
 </footer>
 
 </div><!-- /appRoot -->
+<article id="printReport" class="print-report" dir="rtl" aria-label="گزارش قابل چاپ"></article>
 
-<script src="config.js?v=demo1"></script>
-<script src="app.js?v=demo1"></script>
+<script src="config.js?v=improve1"></script>
+<script src="app.js?v=improve1"></script>
 </body>
 </html>

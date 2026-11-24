@@ -83,14 +83,14 @@ async function api(path, opts={}){
     opts.headers['Authorization'] = 'Bearer ' + session.access_token;
     r = await fetch(BASE + path, opts);
   }
-  if(r.status === 401){ showLogin(); throw new Error('لطفاً دوباره وارد شوید'); }
+  if(r.status === 401){ clearSession(); showLogin(); resetUi(); throw new Error('لطفاً دوباره وارد شوید'); }
   if(!r.ok){ let t=''; try{t=(await r.json()).message||''}catch(e){}; throw new Error(r.status+' '+t); }
   const t = await r.text(); return t? JSON.parse(t): null;
 }
 
 /* ================= بارگذاری بر اساس نقش ================= */
 const ROLE_LABEL={admin:'ادمین',management:'مدیریت',expert:'کارشناس'};
-const ROLE_TABS={admin:['dash','form','table','accounts'],management:['dash'],expert:['form']};
+const ROLE_TABS={admin:['dash','form','table','accounts','catalog'],management:['dash'],expert:['form']};
 function rpc(name, payload={}){
   return api('rpc/'+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
 }
@@ -104,24 +104,25 @@ async function allPages(path){
   }
 }
 async function loadAll(){
-  const role=state.role, initial=!state.ready;
+  const role=state.role, initial=!state.ready,scope=state.demoScope;
   let data;
   if(role==='management') data=await rpc('kpi_dashboard');
   else if(role==='expert') data=await rpc('kpi_expert_form');
   else if(role==='admin') {
     const [logs,personnel,activities,stakeholders,projects,submissions]=await Promise.all([
-      allPages('activity_logs?select=id,period_year,period_month,hours,doc_count,source,letter_date,notes,activity_id,stakeholder_id,project_id,employee:personnel(id,department:departments(name_fa),name_en),activity:activities(general_fa,specific_title,effort_score,value_score),stakeholder:stakeholders(name_fa)&order=id'),
+      allPages('activity_logs?select=id,period_year,period_month,hours,doc_count,source,letter_date,notes,quality_reason,activity_id,stakeholder_id,project_id,employee:personnel(id,department:departments(name_fa),name_en),activity:activities(general_fa,specific_title,effort_score,value_score),stakeholder:stakeholders(name_fa)&order=id'),
       allPages('personnel?select=id,employee_no,name_en,active,department:departments(name_fa)&order=name_en,id'),
       allPages('activities?select=id,general_fa,specific_title,effort_score,value_score,avg_hours_doc&order=general_fa,id'),
-      allPages('stakeholders?select=id,name_fa&order=name_fa,id'),
-      allPages('projects?select=id,name_fa&order=name_fa,id'),
+      allPages('stakeholders?select=id,name_fa,active&order=name_fa,id'),
+      allPages('projects?select=id,name_fa,active&order=name_fa,id'),
       allPages('monthly_submissions?select=employee_id,period_year,period_month,status&order=id'),
     ]);
     data={logs,personnel,activities,stakeholders,projects,submissions};
   } else throw new Error('برای این حساب هنوز نقشی تعیین نشده است. با ادمین تماس بگیرید.');
-  if(!session || state.role!==role) return;
-  const {logs,personnel,activities=[],stakeholders=[],projects=[],submissions}=data;
-  Object.assign(state,{logs,personnel,activities,stakeholders,projects,submissions});
+  if(role!=='expert') data.projectLoad=await rpc('kpi_project_load',{p_demo:false}).catch(()=>null);
+  if(!session || state.role!==role || state.demoScope!==scope) return;
+  const {projectLoad=null,logs,personnel,activities=[],stakeholders=[],projects=[],submissions}=data;
+  Object.assign(state,{logs,personnel,activities,stakeholders,projects,submissions,projectLoad});
   const months=[...new Set(logs.map(l=>l.period_year*100+l.period_month))].sort((a,b)=>a-b);
   const now=new Intl.DateTimeFormat('en-US-u-ca-persian',{year:'numeric',month:'numeric'}).formatToParts(new Date());
   const yr=Number(now.find(p=>p.type==='year').value), mo=Number(now.find(p=>p.type==='month').value);
@@ -133,9 +134,9 @@ async function loadAll(){
     const years=[...new Set([yr-1,yr,yr+1,year,...months.map(m=>Math.floor(m/100)),...submissions.map(s=>s.period_year)])].sort((a,b)=>a-b);
     fillSelect('#eYear',years.map(v=>({v,t:v})),year);
     fillSelect('#eMonth',FA_MONTHS.map((t,i)=>({v:i+1,t})),month);
-    fillSelect('#ePerson',[...(role==='admin'?[{v:'',t:'انتخاب کارشناس'}]:[]),...personnel.map(p=>({v:p.id,t:`${p.name_en} (${p.employee_no}) — ${p.department.name_fa}`}))],person);
+    fillSelect('#ePerson',[...(role==='admin'?[{v:'',t:'انتخاب کارشناس'}]:[]),...personnel.filter(p=>p.active).map(p=>({v:p.id,t:`${p.name_en} (${p.employee_no}) — ${p.department.name_fa}`}))],person);
     $('#ePerson').disabled=role==='expert';
-    fillSelect('#eStake',[{v:'',t:'—'},...stakeholders.map(s=>({v:s.id,t:s.name_fa}))],initial?'':$('#eStake').value);
+    fillSelect('#eStake',[{v:'',t:'—'},...stakeholders.filter(s=>s.active!==false).map(s=>({v:s.id,t:s.name_fa}))],initial?'':$('#eStake').value);
     fillSelect('#eProject',[{v:'',t:'—'},...projects.map(p=>({v:p.id,t:p.name_fa}))],initial?'':$('#eProject').value);
     refreshActivities();
   }
@@ -188,7 +189,11 @@ async function toggleDemo(){
   const scope=state.demoScope, role=state.role, btn=$('#btnDemo');
   btn.disabled=true;
   try{
-    const data=state.demoData || await rpc('kpi_demo_dashboard');
+    let data=state.demoData;
+    if(!data){
+      const [base,projectLoad]=await Promise.all([rpc('kpi_demo_dashboard'),rpc('kpi_project_load',{p_demo:true}).catch(()=>null)]);
+      data={...base,projectLoad};
+    }
     if(!session||scope!==state.demoScope||role!==state.role||state.tab!=='dash') return;
     state.realFilters={month:state.month,dept:state.dept,person:state.person};
     state.demoData=data;
@@ -330,9 +335,9 @@ function render(){
   const prevH=allMonth.filter(l=>l.period_year===py&&l.period_month===pm).reduce((a,l)=>a+Number(l.hours),0);
   const mom=prevH? (hours-prevH)/prevH*100 : null;
   const rk=roster();
+  const eligible=new Set(rk.map(p=>p.id));
   const subm=data.submissions.filter(s=>s.period_year===y&&s.period_month===m&&s.status==='submitted')
-              .filter(s=>!state.dept||rk.some(p=>p.id===s.employee_id))
-              .filter(s=>!state.person||String(s.employee_id)===state.person);
+              .filter(s=>eligible.has(s.employee_id));
   const subPct=rk.length? Math.round(subm.length/rk.length*100):0;
 
   $('#kpiHours').textContent=fmt(hours);
@@ -382,6 +387,9 @@ function render(){
     veAgg[k].h+=Number(l.hours);
   });
   $('#chVE').innerHTML=bubbles(Object.values(veAgg));
+  const groups=renderPriorities(Object.values(veAgg),hours);
+  const portfolio=portfolioForScope(); renderPortfolio(portfolio);
+  printMetrics={hours,docs,people,mom,submitted,eligible:rk.length,subPct,deptData,groups,portfolio};
 
   // ---- فعالیت‌ها ----
   const actAgg={};
@@ -408,12 +416,91 @@ function render(){
   if(state.role==='admin') renderMyRows();
 }
 
+const QUADRANTS=[
+  {t:'ارزش بالا · تلاش پایین',action:'گزینهٔ اول برای تسریع یا گسترش',match:(v,e)=>v>=5&&e<=4},
+  {t:'ارزش بالا · تلاش بالا',action:'برای ظرفیت و گلوگاه‌ها برنامه‌ریزی شود',match:(v,e)=>v>=5&&e>=5},
+  {t:'ارزش پایین · تلاش بالا',action:'نامزد ساده‌سازی یا بازبینی فرایند',match:(v,e)=>v<=4&&e>=5},
+  {t:'ارزش پایین · تلاش پایین',action:'استانداردسازی یا تجمیع بررسی شود',match:(v,e)=>v<=4&&e<=4},
+];
+const percent=(a,b)=>b>0?100*a/b:0;
+const sumHours=rows=>rows.reduce((sum,r)=>sum+Number(r.hours),0);
+const descending=m=>[...m.values()].sort((a,b)=>b.hours-a.hours||a.name.localeCompare(b.name,'fa'));
+const faNum=new Intl.NumberFormat('fa-IR',{maximumFractionDigits:2});
+const faN=n=>faNum.format(n);
+const asciiDigits=s=>s.replace(/[۰-۹٠-٩]/g,c=>String('۰۱۲۳۴۵۶۷۸۹'.includes(c)?'۰۱۲۳۴۵۶۷۸۹'.indexOf(c):'٠١٢٣٤٥٦٧٨٩'.indexOf(c)));
+
+function renderPriorities(items,hours){
+  const groups=QUADRANTS.map(q=>{
+    const group=items.filter(p=>p.x>=1&&p.x<=7&&p.y>=1&&p.y<=7&&q.match(p.x,p.y)).sort((a,b)=>b.h-a.h);
+    return {...q,count:group.length,hours:group.reduce((s,p)=>s+p.h,0),leading:group.find(p=>p.h>0)?.t};
+  });
+  $('#priorityGrid').innerHTML=groups.map(q=>`<div class="priority-tile"><strong>${esc(q.t)}</strong><div class="measure">${faN(q.hours)} ساعت · ${faN(percent(q.hours,hours))}٪</div><small>${faN(q.count)} گروه فعالیت · ${esc(q.action)}</small>${q.leading?`<small>بیشترین بار: ${esc(q.leading)}</small>`:''}</div>`).join('');
+  return groups;
+}
+
+function portfolioForScope(){
+  const items=dashboardData().projectLoad;
+  if(!Array.isArray(items)) return null;
+  const rows=items.filter(x=>x.period_year*100+x.period_month===state.month&&(!state.dept||x.department===state.dept)&&(!state.person||String(x.employee_id)===state.person));
+  const project=new Map(),stakeholder=new Map();
+  const add=(map,id,name,dept,h,code)=>{
+    if(!map.has(id)) map.set(id,{id,name,hours:0,units:new Map(),code});
+    const a=map.get(id);a.hours+=h;a.units.set(dept,(a.units.get(dept)||0)+h);
+  };
+  let unassigned=0, unassignedStake=0;
+  for(const r of rows){
+    const h=Number(r.hours); if(r.project_id==null) unassigned+=h;
+    if(r.stakeholder_id==null) unassignedStake+=h;
+    add(project,r.project_id,r.project||'بدون پروژه',r.department,h,r.project_code);
+    add(stakeholder,r.stakeholder_id,r.stakeholder||'بدون ذینفع',r.department,h);
+  }
+  return {project:descending(project),stakeholder:descending(stakeholder),unassigned,unassignedStake,hours:sumHours(rows)};
+}
+function renderPortfolio(p=portfolioForScope()){
+  if(!p){ $('#portfolioSummary').textContent='';$('#portfolioTable').innerHTML=emptyBox('تحلیل بار کاری فعلاً در دسترس نیست.');return; }
+  const project=$('#portfolioBy').value==='project',unassigned=project?p.unassigned:p.unassignedStake;
+  $('#portfolioSummary').innerHTML=`<span>کل بار: <b>${faN(p.hours)}</b> ساعت</span><span>${project?'بدون پروژه':'بدون ذینفع'}: <b>${faN(unassigned)}</b> ساعت (${faN(percent(unassigned,p.hours))}٪)</span><span>نمایش حداکثر ۱۰ مورد بر اساس نفرساعت</span>`;
+  const rows=(project?p.project:p.stakeholder).slice(0,10);
+  if(!rows.length){$('#portfolioTable').innerHTML=emptyBox('در این محدوده داده‌ای ثبت نشده است.');return;}
+  const seg=r=>[...r.units.entries()].sort((a,b)=>b[1]-a[1]).slice(0,3).map(([d,h])=>`${esc(d)}: ${faN(h)}`).join('، ');
+  $('#portfolioTable').innerHTML=`<table><thead><tr><th>${project?'پروژه':'ذینفع'}</th><th>نفرساعت</th><th>سهم از کل</th><th>واحدهای دارای بیشترین بار (تا ۳ واحد)</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}${r.code?` <span class="hint" dir="auto">(${esc(r.code)})</span>`:''}</td><td>${faN(r.hours)}</td><td>${faN(percent(r.hours,p.hours))}٪</td><td>${seg(r)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+let printMetrics=null;
+function printReport(){
+  if(!['admin','management'].includes(state.role)||state.tab!=='dash'||!printMetrics) return;
+  const {hours,docs,people,mom,submitted,eligible,subPct,deptData,groups,portfolio}=printMetrics;
+  const p=$('#printReport');
+  const noData=!filtered(true).length;
+  const person=state.person?dashboardData().personnel.find(x=>String(x.id)===state.person)?.name_en:null;
+  const source=state.demo?(state.month===140506?'شهریور واقعی در نمای آزمایشی؛ مقایسهٔ رشد با مرداد ساختگی است.':'دادهٔ ماه انتخابی ساختگی است؛ برای ارزیابی افراد استفاده نشود.'):'داده‌های واقعی';
+  const months=$('#fMonth').selectedOptions[0]?.textContent||'—';
+  const pairs=[['نفرساعت',faN(hours)],['رشد ماهانه',mom===null?'—':`${faN(mom)}٪`],['افراد دارای فعالیت',faN(people)],['مدرک یا موضوع',faN(docs)],['گزارش‌دهی',eligible?`${faN(subPct)}٪`:'—']];
+  const cut=s=>esc(trunc(s,70)), list=(rows,name,h)=>rows.slice(0,5).map(r=>`<tr><td>${cut(name(r))}</td><td>${faN(h(r))}</td></tr>`).join('');
+  const table=(title,rows)=>`<section><h2>${title}</h2>${rows?`<table><thead><tr><th>عنوان</th><th>نفرساعت</th></tr></thead><tbody>${rows}</tbody></table>`:'<p>داده‌ای برای نمایش نیست.</p>'}</section>`;
+  const summary=[];
+  if(eligible&&submitted<eligible) summary.push(`${faN(eligible-submitted)} نفر از فهرست فعال در این محدوده گزارش نهایی ندارند.`);
+  if(portfolio?.unassigned>0) summary.push(`${faN(portfolio.unassigned)} نفرساعت بدون پروژهٔ مشخص ثبت شده است (${faN(percent(portfolio.unassigned,portfolio.hours))}٪).`);
+  const leadingStake=portfolio?.stakeholder.find(r=>r.id!=null&&r.hours>0);
+  if(leadingStake) summary.push(`ذینفع با بیشترین بار: ${trunc(leadingStake.name,70)}، ${faN(leadingStake.hours)} نفرساعت.`);
+  if(groups[2].hours>0) summary.push(`${faN(groups[2].hours)} نفرساعت در گروه «ارزش پایین، تلاش بالا» است؛ برای بازبینی فرایند بررسی شود.`);
+  if(!summary.length) summary.push(noData?'در محدودهٔ انتخابی فعالیتی برای تحلیل وجود ندارد.':'بر اساس شاخص‌های این خلاصه، مورد خاصی برای پیگیری علامت نخورده است.');
+  p.innerHTML=`<header><h1>گزارش مدیریتی عملکرد معاونت مهندسی</h1><p class="print-meta">دوره: ${esc(months)} · واحد: ${esc(state.dept||'همه')} · کارشناس: ${esc(person||'همه')}</p><p class="print-meta">نوع داده: ${esc(source)} · تاریخ تهیه: ${esc(new Intl.DateTimeFormat('fa-IR-u-ca-persian').format(new Date()))}</p></header>`+
+    (state.demo?'<p class="print-alert">نمای آزمایشی — این گزارش مبنای ارزیابی عملکرد نیست.</p>':'')+
+    `<section class="print-kpis">${pairs.map(([k,v])=>`<div><strong>${esc(v)}</strong>${esc(k)}</div>`).join('')}</section>`+
+    `<section><h2>اولویت ارزش و تلاش</h2><ul>${groups.map(q=>`<li>${esc(q.t)}: ${faN(q.hours)} نفرساعت (${faN(percent(q.hours,hours))}٪)</li>`).join('')}</ul></section>`+
+    `<div class="print-grid">${table('واحدهای دارای بیشترین بار',list(deptData,r=>r.t,r=>r.v))}${table('پروژه‌های دارای بیشترین بار',list((portfolio?.project||[]).filter(r=>r.id!=null),r=>r.name,r=>r.hours))}</div>`+
+    `<section><h2>موارد قابل پیگیری</h2><ul>${summary.map(t=>`<li>• ${esc(t)}</li>`).join('')}</ul></section><small>گزارش‌های نهایی: ${faN(submitted)} از ${faN(eligible)} نفر فعال.${state.role==='admin'&&!state.demo?' نمای ادمین ممکن است شامل پیش‌نویس‌ها باشد.':''} نفرساعت، حجم کار ثبت‌شده است و به‌تنهایی معیار کیفیت نیست.</small>`;
+  p.dataset.ready='true';
+  window.print();
+}
+
 /* ================= جدول ================= */
 function renderTable(logs){
   const rows=logs.slice(0,300);
   if(!rows.length){ $('#tblWrap').innerHTML=emptyBox('رکوردی با این فیلترها یافت نشد'); return; }
   let h=`<table><tr><th>#</th><th>کارشناس</th><th>دپارتمان</th><th>ماه</th><th>منبع</th><th>فعالیت</th>`+
-        `<th>ذینفع</th><th>نفرساعت</th><th>تعداد</th><th>تاریخ نامه</th></tr>`;
+        `<th>ذینفع</th><th>نفرساعت</th><th>تعداد</th><th>تاریخ نامه</th><th>توضیح کنترل کیفیت</th></tr>`;
   rows.forEach((l,i)=>{
     h+=`<tr><td>${i+1}</td><td>${esc(l.employee? l.employee.name_en:'—')}</td>`+
        `<td>${esc(l.employee? l.employee.department.name_fa:'—')}</td>`+
@@ -422,7 +509,7 @@ function renderTable(logs){
        `<td>${esc(l.activity? (l.activity.specific_title||l.activity.general_fa):'—')}</td>`+
        `<td>${esc(l.stakeholder? l.stakeholder.name_fa:'—')}</td>`+
        `<td><b>${fmt(l.hours)}</b></td><td>${fmt(l.doc_count)}</td>`+
-       `<td class="ltr">${esc(l.letter_date||'—')}</td></tr>`;
+       `<td class="ltr">${esc(l.letter_date||'—')}</td><td class="quality-note">${esc(l.quality_reason||'—')}</td></tr>`;
   });
   $('#tblWrap').innerHTML=h+`</table><div class="hint" style="margin-top:8px">نمایش ${rows.length} از ${logs.length} ردیف</div>`;
 }
@@ -515,9 +602,9 @@ async function submitLog(){
       const [yd,md,dd]=persianParts(date);
       if(yd!==yy||md!==mo||dd!==d) throw new Error('تاریخ نامه معتبر نیست.');
     }
-    await runReport('save',{p_id:editing,p_entry:{activity_id:aid,source:$('#eSource').value,
+    await reviewAndSave({activity_id:aid,source:$('#eSource').value,
       stakeholder_id:Number($('#eStake').value)||null,project_id:Number($('#eProject').value)||null,
-      hours,doc_count:docs,letter_date:date,notes:$('#eNotes').value||null}},'فعالیت در پیش‌نویس ذخیره شد.');
+      hours,doc_count:docs,letter_date:date,notes:$('#eNotes').value||null});
   }catch(e){ reportMsg(e.message,true); }
 }
 const persianDay=new Intl.DateTimeFormat('en-US-u-ca-persian',{timeZone:'UTC',year:'numeric',month:'numeric',day:'numeric'});
@@ -570,6 +657,108 @@ function renderMyRows(){
   });
 }
 
+let catalogRows=[],catalogSeq=0,catalogBusy=false;
+function catMsg(text,error=false){const el=$('#catMsg');el.className='msg '+(error?'err':'ok');el.textContent=text;}
+function setCatalogFields(){
+  const kind=$('#catKind').value, isPerson=kind==='personnel',isProject=kind==='projects';
+  for(const s of ['#catEmployeeField','#catDeptField']) $(s).hidden=!isPerson;
+  for(const s of ['#catContractField','#catStakeField']) $(s).hidden=!isProject;
+  $('#catEmployee').required=$('#catDept').required=isPerson;
+}
+function renderCatalog(){
+  const find=$('#catSearch').value.trim().toLocaleLowerCase('fa'), status=$('#catStatus').value;
+  const rows=catalogRows.filter(x=>(status==='all'||(status==='active')===x.active)&&(!find||[x.name,x.employee_no,x.department,x.contract_no,x.stakeholder].some(a=>String(a||'').toLocaleLowerCase('fa').includes(find))));
+  if(!rows.length){$('#catTable').innerHTML=emptyBox('موردی برای این فیلتر پیدا نشد.');return;}
+  $('#catTable').innerHTML=`<p class="hint">${faN(rows.length)} مورد</p><table><thead><tr><th>نام</th><th>مشخصات</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody>${rows.map((x,i)=>`<tr><td dir="auto">${esc(x.name)}</td><td>${[x.employee_no,x.department,x.contract_no,x.stakeholder].filter(Boolean).map(esc).join(' · ')||'—'}</td><td><span class="catalog-pill${x.active?'':' archived'}">${x.active?'فعال':'بایگانی‌شده'}</span></td><td><button type="button" class="ghost" data-cat-row="${i}"${catalogBusy?' disabled':''}>${x.active?'بایگانی':'بازیابی'}</button></td></tr>`).join('')}</tbody></table>`;
+  $('#catTable').querySelectorAll('[data-cat-row]').forEach(b=>b.onclick=()=>{
+    const item=rows[b.dataset.catRow],kind=$('#catKind').value;
+    if(item.active&&!confirm(`«${item.name}» بایگانی شود؟ گزارش‌های قبلی حذف نمی‌شوند.`)) return;
+    changeCatalog({p_kind:kind,p_action:item.active?'archive':'restore',p_id:item.id},item.active?'مورد بایگانی شد؛ سوابق قبلی محفوظ است.':'مورد بازیابی شد.');
+  });
+}
+async function loadCatalog(){
+  if(state.role!=='admin') return;
+  const ticket=++catalogSeq, kind=$('#catKind').value;
+  $('#catAdd').disabled=true;
+  $('#catTable').innerHTML=emptyBox('در حال دریافت فهرست…');
+  catalogRows=[];setCatalogFields();
+  try{
+    const [list,deps,stakes]=await Promise.all([
+      rpc('kpi_catalog',{p_kind:kind}),
+      kind==='personnel'?rpc('kpi_catalog',{p_kind:'departments'}):Promise.resolve([]),
+      kind==='projects'?rpc('kpi_catalog',{p_kind:'stakeholders'}):Promise.resolve([]),
+    ]);
+    if(ticket!==catalogSeq||state.role!=='admin') return;
+    catalogRows=list;
+    if(kind==='personnel') fillSelect('#catDept',[{v:'',t:'انتخاب دپارتمان'},...deps.filter(x=>x.active).map(x=>({v:x.id,t:x.name}))],'');
+    if(kind==='projects') fillSelect('#catStake',[{v:'',t:'بدون ذینفع'},...stakes.filter(x=>x.active).map(x=>({v:x.id,t:x.name}))],'');
+    renderCatalog();
+  }catch(e){ if(ticket===catalogSeq&&state.role==='admin'){catMsg(e.message,true);$('#catTable').innerHTML=emptyBox('دریافت فهرست ناموفق بود.');} }
+  finally{if(ticket===catalogSeq) $('#catAdd').disabled=catalogBusy;}
+}
+async function changeCatalog(params,success){
+  if(state.role!=='admin'||catalogBusy) return;
+  const scope=state.demoScope;
+  catalogBusy=true;$('#catKind').disabled=true;$('#catAdd').disabled=true;renderCatalog();catMsg('');
+  try{
+    await rpc('kpi_catalog',params);
+    if(scope!==state.demoScope||state.role!=='admin')return;
+    if(params.p_action==='add'){
+      for(const s of ['#catName','#catEmployee','#catContract','#catDept','#catStake']) $(s).value='';
+      $('#catStatus').value='all'; $('#catSearch').value='';
+    }
+    state.demoData=null;
+    await loadCatalog();
+    try{await loadAll(); if(state.role==='admin') render();}
+    catch(e){catMsg(success+' برای تازه‌کردن فرم‌ها، صفحه را بازخوانی کنید.',true);return;}
+    if(scope===state.demoScope) catMsg(success);
+  }catch(e){ if(scope===state.demoScope) catMsg(e.message,true); }
+  finally{if(scope===state.demoScope){catalogBusy=false;$('#catKind').disabled=false;$('#catAdd').disabled=false;renderCatalog();}}
+}
+function submitCatalog(e){
+  e.preventDefault();
+  const kind=$('#catKind').value,meta={};
+  if(kind==='personnel') {meta.employee_no=asciiDigits($('#catEmployee').value).trim();meta.department_id=Number($('#catDept').value)||null;}
+  if(kind==='projects'){meta.contract_no=$('#catContract').value.trim();meta.stakeholder_id=Number($('#catStake').value)||null;}
+  changeCatalog({p_kind:kind,p_action:'add',p_name:$('#catName').value.trim(),p_meta:meta},'مورد جدید به فهرست اضافه شد.');
+}
+
+function askQualityReason(warnings){
+  const dialog=$('#qualityDialog'),form=$('#qualityForm'),reason=$('#qualityReason');
+  $('#qualityWarnings').replaceChildren(...warnings.map(w=>{const li=document.createElement('li');li.textContent=w;return li;}));
+  form.reset();reason.setCustomValidity('');
+  return new Promise(resolve=>{
+    let answer=null;
+    dialog.onclose=()=>{form.onsubmit=null;dialog.onclose=null;reason.value='';resolve(answer);};
+    form.onsubmit=e=>{
+      e.preventDefault();const val=reason.value.trim();
+      if(val.length<5){reason.setCustomValidity('حداقل ۵ کاراکتر توضیح بنویسید.');reason.reportValidity();return;}
+      answer=val;dialog.close();
+    };
+    reason.oninput=()=>reason.setCustomValidity('');
+    dialog.showModal(); reason.focus();
+  });
+}
+async function reviewAndSave(entry){
+  if(reportBusy) return;
+  const scope=state.demoScope, period=reportPeriod(), entryId=editing;
+  reportBusy=true;renderMyRows();reportMsg('در حال کنترل ردیف…');
+  try{
+    const check=await rpc('kpi_review_activity',{...period,p_id:entryId,p_entry:entry});
+    if(scope!==state.demoScope||!state.role) return;
+    if(check.errors.length) throw new Error(check.errors.join(' '));
+    if(check.warnings.length){
+      const reason=await askQualityReason(check.warnings);
+      if(scope!==state.demoScope||!state.role) return;
+      if(!reason){reportMsg('ذخیره انجام نشد؛ ردیف را بررسی کنید.');return;}
+      entry.quality_reason=reason;
+    }
+    reportBusy=false;
+    await runReport('save',{...period,p_id:entryId,p_entry:entry},'فعالیت در پیش‌نویس ذخیره شد.');
+  }catch(e){ if(scope===state.demoScope) reportMsg(e.message,true); }
+  finally{if(scope===state.demoScope){reportBusy=false;renderMyRows();}}
+}
+
 /* ================= هماهنگی و رویدادها ================= */
 function syncFilters(){ // حفظ مقادیر بعد از reload
   $('#fMonth').value=String(state.month);
@@ -582,10 +771,12 @@ function selectTab(tab){
   document.querySelectorAll('.tab[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
   state.tab=tab;
+  $('#btnPrint').hidden=tab!=='dash';
   if(tab!=='dash') exitDemo();
   updateDemoUi();
   $('#filters').style.display=tab==='dash'||tab==='table'?'flex':'none';
   if(tab==='form') renderMyRows();
+  if(tab==='catalog') {catMsg('');loadCatalog();}
 }
 async function startApp(){
   resetUi();
@@ -599,8 +790,13 @@ async function startApp(){
   showApp();
 }
 function resetUi(){
-  Object.assign(state,{role:null,employeeId:null,ready:false,tab:null,demo:false,demoData:null,realFilters:null,demoScope:Symbol(),month:null,dept:'',person:'',logs:[],personnel:[],activities:[],stakeholders:[],projects:[],submissions:[]});
-  editing=null;
+  Object.assign(state,{role:null,employeeId:null,ready:false,tab:null,demo:false,demoData:null,realFilters:null,demoScope:Symbol(),projectLoad:null,month:null,dept:'',person:'',logs:[],personnel:[],activities:[],stakeholders:[],projects:[],submissions:[]});
+  editing=null;reportBusy=false;
+  catalogSeq++;catalogRows=[];catalogBusy=false;$('#catKind').disabled=false;$('#catTable').textContent='';catMsg('');
+  $('#catForm').reset();$('#catKind').value='personnel';$('#catStatus').value='all';$('#catSearch').value='';setCatalogFields();
+  if($('#qualityDialog').open) $('#qualityDialog').close();
+  printMetrics=null;$('#printReport').removeAttribute('data-ready');$('#printReport').textContent='';
+  for(const i of ['#priorityGrid','#portfolioSummary','#portfolioTable']) $(i).textContent='';
   updateDemoUi();
   $('#demoMsg').textContent='';
   for(const sel of ['#tblWrap','#myRows','#loadState','#whoami','#eMsg','#roleMsg','#reportState']) $(sel).textContent='';
@@ -615,6 +811,14 @@ function resetUi(){
 document.addEventListener('DOMContentLoaded', ()=>{
   document.querySelectorAll('.tab[data-tab]').forEach(b=>b.onclick=()=>selectTab(b.dataset.tab));
   $('#btnDemo').onclick=toggleDemo;
+  $('#portfolioBy').onchange=()=>renderPortfolio();
+  $('#catKind').onchange=()=>{$('#catForm').reset();$('#catSearch').value='';catMsg('');loadCatalog();};
+  $('#catStatus').onchange=renderCatalog;
+  $('#catSearch').oninput=renderCatalog;
+  $('#catForm').onsubmit=submitCatalog;
+  $('#qualityCancel').onclick=()=>$('#qualityDialog').close();
+  $('#btnPrint').onclick=printReport;
+  window.addEventListener('afterprint',()=>{ $('#printReport').removeAttribute('data-ready'); $('#printReport').textContent=''; });
   $('#fMonth').onchange=e=>{ state.month=+e.target.value; render(); };
   $('#fDept').onchange=e=>{ state.dept=e.target.value; render(); };
   $('#fPerson').onchange=e=>{ state.person=e.target.value; render(); };
@@ -641,7 +845,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if((role==='admin'||role==='none')&&!confirm('نقش انتخاب‌شده برای این حساب اعمال شود؟')) return;
     $('#roleSave').disabled=true; msg.textContent='';
     try{
-      await rpc('kpi_set_role',{p_email:email,p_role:role,p_employee_no:role==='expert'?$('#roleEmployee').value.trim():null});
+      await rpc('kpi_set_role',{p_email:email,p_role:role,p_employee_no:role==='expert'?asciiDigits($('#roleEmployee').value).trim():null});
       msg.className='msg ok'; msg.textContent=role==='none'?'دسترسی حساب لغو شد.':'نقش حساب ذخیره شد.';
     }catch(e){ msg.className='msg err'; msg.textContent=e.message; }
     finally{ $('#roleSave').disabled=false; }
