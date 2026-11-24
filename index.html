@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>داشبورد عملکرد معاونت مهندسی</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">▦</span>
+    <div>
+      <h1>داشبورد عملکرد معاونت مهندسی</h1>
+      <div class="sub" id="loadState">در حال بارگذاری…</div>
+    </div>
+  </div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="dash">📈 داشبورد</button>
+    <button class="tab" data-tab="form">📝 فرم ورود ماهانه</button>
+    <button class="tab" data-tab="table">🗂 جدول داده‌ها</button>
+  </nav>
+</header>
+
+<!-- ============ فیلترها ============ -->
+<section class="filters" id="filters">
+  <label>ماه
+    <select id="fMonth"></select>
+  </label>
+  <label>دپارتمان
+    <select id="fDept"><option value="">همه</option></select>
+  </label>
+  <label>کارشناس
+    <select id="fPerson"><option value="">همه</option></select>
+  </label>
+  <button class="ghost" id="fReset">بازنشانی</button>
+</section>
+
+<!-- ============ تب داشبورد ============ -->
+<main id="tab-dash" class="tabpane active">
+
+  <section class="kpis" id="kpis">
+    <div class="kpi"><div class="kpi-v" id="kpiHours">—</div><div class="kpi-l">نفرساعت ماه</div><div class="kpi-d" id="kpiHoursD"></div></div>
+    <div class="kpi"><div class="kpi-v" id="kpiMom">—</div><div class="kpi-l">رشد نسبت به ماه قبل</div><div class="kpi-d" id="kpiMomD"></div></div>
+    <div class="kpi"><div class="kpi-v" id="kpiPeople">—</div><div class="kpi-l">کارشناس فعال</div><div class="kpi-d" id="kpiPeopleD"></div></div>
+    <div class="kpi"><div class="kpi-v" id="kpiDocs">—</div><div class="kpi-l">مدرک / موضوع بررسی‌شده</div><div class="kpi-d" id="kpiDocsD"></div></div>
+    <div class="kpi"><div class="kpi-v" id="kpiSub">—</div><div class="kpi-l">درصد گزارش‌دهی</div><div class="kpi-d" id="kpiSubD"></div></div>
+  </section>
+
+  <section class="grid">
+    <div class="card c2">
+      <h3>روند ماهانه نفرساعت</h3>
+      <div id="chTrend" class="chart"></div>
+    </div>
+    <div class="card">
+      <h3>وضعیت گزارش‌دهی ماه</h3>
+      <div id="chSub" class="chart"></div>
+    </div>
+    <div class="card c2">
+      <h3>بار دپارتمان‌ها در مقابل ظرفیت (۱۸۰ ساعت/نفر)</h3>
+      <div id="chDept" class="chart"></div>
+    </div>
+    <div class="card">
+      <h3>Value در مقابل Effort <span class="hint">(حجم = نفرساعت)</span></h3>
+      <div id="chVE" class="chart"></div>
+    </div>
+    <div class="card c2">
+      <h3>نفرساعت به تفکیک فعالیت</h3>
+      <div id="chAct" class="chart"></div>
+    </div>
+    <div class="card c2">
+      <h3>مقایسه ذینفعان (نفرساعت)</h3>
+      <div id="chStk" class="chart"></div>
+    </div>
+    <div class="card c2">
+      <h3>سهم منابع ثبت (Pargar / PMIS / استعلام / جلسات / …)</h3>
+      <div id="chSrc" class="chart"></div>
+    </div>
+  </section>
+</main>
+
+<!-- ============ تب فرم ورود ============ -->
+<main id="tab-form" class="tabpane">
+  <section class="card formcard">
+    <h3>ثبت فعالیت ماهانه</h3>
+    <div class="formgrid">
+      <label>ماه <select id="eMonth"></select></label>
+      <label>سال <select id="eYear"><option>1405</option><option>1406</option></select></label>
+      <label>کارشناس <select id="ePerson"></select></label>
+      <label>منبع ثبت
+        <select id="eSource">
+          <option value="pargar">پرگار (بررسی مدارک)</option>
+          <option value="pmis">PMIS (بررسی مدارک)</option>
+          <option value="inquiry">استعلام مهندسی</option>
+          <option value="meeting_mission_committee">جلسات / مأموریت / کمیته</option>
+          <option value="procedure">دستورالعمل</option>
+          <option value="gis">فعالیت‌های GIS</option>
+          <option value="other">سایر</option>
+        </select>
+      </label>
+      <label>فعالیت <select id="eActivity"></select></label>
+      <label>ذینفع <select id="eStake"></select></label>
+      <label>پروژه (اختیاری) <select id="eProject"></select></label>
+      <label>نفرساعت <input type="number" id="eHours" min="0" step="0.25" placeholder="مثلاً 8"></label>
+      <label>تعداد مدرک/موضوع <input type="number" id="eDocs" min="0" step="1" placeholder="مثلاً 2"></label>
+      <label class="hl" id="eHint">💡 امتیاز Effort/Value خودکار از ماتریس فعالیت انتخاب می‌شود.</label>
+      <label>تاریخ نامه (شمسی، اختیاری)
+        <div class="drow"><input type="number" id="eDay" placeholder="روز" min="1" max="31">
+        <input type="number" id="eMon" placeholder="ماه" min="1" max="12">
+        <input type="number" id="eYearD" placeholder="سال" min="1400" max="1460" value=""></div>
+      </label>
+      <label>توضیحات <input type="text" id="eNotes" placeholder="عنوان/توضیح (اختیاری)"></label>
+    </div>
+    <div class="actions">
+      <button class="primary" id="eSubmit">ثبت فعالیت</button>
+      <button class="ghost" id="eSubmitMonth">✔ ثبت وضعیت «گزارش ماه» برای من</button>
+      <span id="eMsg" class="msg"></span>
+    </div>
+
+    <h3>فعالیت‌های ثبت‌شده توسط شما در ماه انتخابی</h3>
+    <div id="myRows" class="minitable">—</div>
+  </section>
+</main>
+
+<!-- ============ تب جدول ============ -->
+<main id="tab-table" class="tabpane">
+  <section class="card">
+    <h3>رویدادهای ثبت‌شده <span class="hint">(با فیلترهای بالا)</span></h3>
+    <div id="tblWrap" class="tblwrap"></div>
+  </section>
+</main>
+
+<footer>
+  منبع داده: Supabase <code>engineering-kpi</code> · دوره: شهریور ۱۴۰۵ (۵۳۰ رویداد، ۵٬۸۴۱٫۷۷ نفرساعت) ·
+  داده تاریخی از فایل گزارش معاونت بازیابی‌شده
+</footer>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
