@@ -4,19 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>داشبورد عملکرد معاونت مهندسی</title>
-<link rel="stylesheet" href="style.css?v=improve1">
+<link rel="stylesheet" href="style.css?v=improve2">
 </head>
-<body>
+<body data-bg="blueprint">
 
 <!-- ============ صفحه ورود ============ -->
 <div class="auth-screen" id="authScreen">
+  <div class="bg-switcher auth-bg-switcher" role="group" aria-label="انتخاب طرح پس‌زمینه">
+    <span class="bg-switcher-lbl">طرح پس‌زمینه:</span>
+    <button type="button" class="bg-pill active" data-bg-choice="blueprint" aria-pressed="true">طرح ۱: نقشه فنی و خطوط انتقال</button>
+    <button type="button" class="bg-pill" data-bg-choice="energy" aria-pressed="false">طرح ۲: شعله آبی و انرژی مدرن</button>
+  </div>
   <div class="auth-card">
-    <div class="auth-logo">▦</div>
+    <div class="auth-logo" aria-hidden="true">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 4 3 5-6"/></svg>
+    </div>
     <h2>داشبورد عملکرد معاونت مهندسی</h2>
-    <p class="auth-sub">برای مشاهده داشبورد و ثبت گزارش ماهانه وارد شوید</p>
+    <p class="auth-sub">شرکت مهندسی و توسعه گاز ایران · سامانه پایش نفرساعت و بهره‌وری</p>
     <label>ایمیل حساب<input type="email" id="authEmail" placeholder="name@company.ir" autocomplete="email"></label>
     <label>رمز عبور<input type="password" id="authPass" placeholder="رمز عبور" autocomplete="current-password"></label>
-    <button class="primary auth-btn" id="btnLogin">ورود</button>
+    <button class="primary auth-btn" id="btnLogin">ورود به سامانه</button>
     <div id="authMsg" class="msg" style="min-height:22px"></div>
     <p class="auth-note">حساب کاربری توسط مدیر سیستم ساخته می‌شود؛ در صورت نیاز به حساب، با مدیر تماس بگیرید.</p>
   </div>
@@ -26,7 +33,9 @@
 
 <header class="topbar">
   <div class="brand">
-    <span class="logo">▦</span>
+    <span class="logo" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 4 3 5-6"/></svg>
+    </span>
     <div>
       <h1>داشبورد عملکرد معاونت مهندسی</h1>
       <div class="sub" id="loadState">در حال بارگذاری…</div>
@@ -40,6 +49,10 @@
     <button class="tab" data-tab="catalog">فهرست‌های پایه</button>
   </nav>
   <div class="who">
+    <div class="bg-switcher top-bg-switcher" role="group" aria-label="انتخاب طرح پس‌زمینه">
+      <button type="button" class="bg-pill active" data-bg-choice="blueprint" aria-pressed="true" title="پس‌زمینه نقشه فنی و خطوط انتقال">طرح ۱: نقشه فنی</button>
+      <button type="button" class="bg-pill" data-bg-choice="energy" aria-pressed="false" title="پس‌زمینه شعله آبی و انرژی مدرن">طرح ۲: انرژی آبی</button>
+    </div>
     <span id="whoami" class="whoami"></span>
     <button class="tab" type="button" id="btnPassword">تغییر رمز</button>
     <button class="tab" id="btnLogout">خروج</button>
@@ -245,7 +258,7 @@
 </div><!-- /appRoot -->
 <article id="printReport" class="print-report" dir="rtl" aria-label="گزارش قابل چاپ"></article>
 
-<script src="config.js?v=improve1"></script>
-<script src="app.js?v=improve1"></script>
+<script src="config.js?v=improve2"></script>
+<script src="app.js?v=improve2"></script>
 </body>
 </html>
