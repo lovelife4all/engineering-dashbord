@@ -220,101 +220,138 @@ function roster(){ // تعداد افراد فعال (با اعمال فیلتر
     (!state.person || String(p.id)===state.person));
 }
 
-/* ================= نمودارهای SVG ================= */
+/* ================= نمودارهای خوانا (HTML + SVG سفارشی) ================= */
 function emptyBox(msg){ return `<div class="empty">${esc(msg)}</div>`; }
 
-/* نوار افقی RTL */
+/* نوار افقی RTL — اعداد همیشه در جلو (بیرونِ سرِ) میله */
 function hbar(data, opt={}){
   if(!data.length) return emptyBox('داده‌ای برای نمایش نیست');
-  const W=opt.w||560, rowH=opt.rowH||30, padT=6, labelW=opt.labelW||190, valW=64;
-  const H=padT+data.length*rowH+8;
-  const max=Math.max(...data.map(d=>d.v),1);
-  const barMax=W-labelW-valW-14;
-  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">`;
+  const max=Math.max(...data.map(d=>Number(d.v)||0),1);
+  const labelW=opt.labelW||200;
+  const unit=opt.unit||'';
+  let s=`<div class="hbar-list" style="--hbar-label-w:${labelW}px">`;
   data.forEach((d,i)=>{
-    const y=padT+i*rowH, w=Math.max(2, d.v/max*barMax);
-    const x=W-labelW-8-w;                      // شروع نوار از چپ برچسب (سمت راست صفحه)
+    const val=Math.max(0, Number(d.v)||0);
+    const ratio=max>0 ? Math.min(1, val/max) : 0;
     const c=d.c||COLORS[i%COLORS.length];
-    s+=`<text x="${W-6}" y="${y+rowH/2+4}" text-anchor="end" font-size="12" fill="#26374f">${esc(trunc(d.t,30))}</text>`;
-    s+=`<rect x="${x}" y="${y+5}" width="${w}" height="${rowH-12}" rx="5" fill="${c}" opacity=".92"/>`;
-    s+=`<text x="${x-6}" y="${y+rowH/2+4}" text-anchor="end" font-size="11.5" fill="#68758c" font-weight="700">${fmt(d.v)}${opt.unit||''}</text>`;
-    if(d.sub) s+=`<text x="${W-6}" y="${y+rowH/2+16}" text-anchor="end" font-size="9.5" fill="#9aa5b8">${esc(d.sub)}</text>`;
+    const titleTxt=d.sub ? `${d.t} — ${d.sub}: ${fmt(val)}${unit}` : `${d.t}: ${fmt(val)}${unit}`;
+    const barStyle=val>0
+      ? `width:calc((100% - 104px) * ${ratio.toFixed(4)});min-width:6px;background:${c}`
+      : `width:0;min-width:0;background:${c}`;
+    s+=`<div class="hbar-row" title="${esc(titleTxt)}">`+
+         `<div class="hbar-label">`+
+           `<div class="hbar-title">${esc(d.t)}</div>`+
+           (d.sub ? `<div class="hbar-sub">${esc(d.sub)}</div>` : '')+
+         `</div>`+
+         `<div class="hbar-track">`+
+           `<div class="hbar-fill" style="${barStyle}"></div>`+
+           `<span class="hbar-val">${fmt(val)}${esc(unit)}</span>`+
+         `</div>`+
+       `</div>`;
   });
-  return s+'</svg>';
+  return s+'</div>';
 }
 function trunc(s,n){ s=String(s??''); return s.length>n? s.slice(0,n-1)+'…':s; }
 
 /* نوار عمودی (روند ماهانه) */
 function vbar(data, opt={}){
   if(!data.length) return emptyBox('داده‌ای برای نمایش نیست');
-  const W=opt.w||560, H=230, padL=42, padR=10, padT=14, padB=40;
+  const W=opt.w||560, H=248, padL=50, padR=14, padT=28, padB=46;
   const max=Math.max(...data.map(d=>d.v),1);
-  const bw=Math.min(64,(W-padL-padR)/data.length-14);
-  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">`;
+  const bw=Math.min(58,(W-padL-padR)/data.length-14);
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="direction:ltr">`;
   for(let g=0; g<=4; g++){
     const y=padT+(H-padT-padB)*g/4, val=max*(4-g)/4;
-    s+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#eef1f6"/>`;
-    s+=`<text x="${padL-6}" y="${y+4}" text-anchor="end" font-size="10" fill="#9aa5b8">${fmt(val)}</text>`;
+    s+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e2e8f0" stroke-dasharray="${g===4?'':'3 3'}"/>`;
+    s+=`<text x="${padL-8}" y="${y+4}" text-anchor="end" font-size="10.5" fill="#475569">${fmt(val)}</text>`;
   }
   const step=(W-padL-padR)/data.length;
   data.forEach((d,i)=>{
     const h=(H-padT-padB)*d.v/max, x=padL+step*i+(step-bw)/2, y=H-padB-h;
-    s+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(h,1.5)}" rx="6" fill="${d.c||'#1d5bd8'}"/>`;
-    s+=`<text x="${x+bw/2}" y="${y-5}" text-anchor="middle" font-size="11" font-weight="700" fill="#26374f">${fmt(d.v)}</text>`;
-    s+=`<text x="${x+bw/2}" y="${H-padB+16}" text-anchor="middle" font-size="11" fill="#68758c">${esc(d.t)}</text>`;
-    if(d.t2) s+=`<text x="${x+bw/2}" y="${H-padB+30}" text-anchor="middle" font-size="10" fill="#9aa5b8">${esc(d.t2)}</text>`;
+    s+=`<g><title>${esc(d.t)}${d.t2?' '+esc(d.t2):''}: ${fmt(d.v)}</title>`;
+    s+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(h,2)}" rx="6" fill="${d.c||'#1d5bd8'}"/>`;
+    s+=`<text x="${x+bw/2}" y="${y-7}" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">${fmt(d.v)}</text>`;
+    s+=`<text x="${x+bw/2}" y="${H-padB+17}" text-anchor="middle" direction="rtl" font-size="11.5" font-weight="700" fill="#334155">${esc(d.t)}</text>`;
+    if(d.t2) s+=`<text x="${x+bw/2}" y="${H-padB+33}" text-anchor="middle" direction="rtl" font-size="10" fill="#64748b">${esc(d.t2)}</text>`;
+    s+=`</g>`;
   });
   return s+'</svg>';
 }
 
-/* دایره‌ای ( دونات ) */
+/* دایره‌ای (دونات) — حلقه SVG تمیز + راهنمای خوانای RTL */
 function donut(data, opt={}){
   const total=data.reduce((a,d)=>a+d.v,0);
   if(!total) return emptyBox('داده‌ای برای نمایش نیست');
-  const S=200, cx=100, cy=100, r=64, ir=38;
-  let a0=-Math.PI/2, s=`<svg viewBox="0 0 ${S} ${S+ (opt.legend===false?0:18*Math.ceil(data.length/2))}" width="100%" style="max-width:230px;margin:0 auto">`;
+  const S=180, cx=90, cy=90, r=68, ir=45;
+  const palette=opt.colors||COLORS;
+  let a0=-Math.PI/2;
+  let svg=`<svg class="donut-ring" viewBox="0 0 ${S} ${S}" style="direction:ltr">`;
+  const nonZero=data.filter(d=>d.v>0);
   data.forEach((d,i)=>{
-    const a1=a0+(d.v/total)*Math.PI*2, c=COLORS[i%COLORS.length];
-    const large=(a1-a0)>Math.PI?1:0;
-    const p=(ang,rad)=>[cx+rad*Math.cos(ang), cy+rad*Math.sin(ang)];
-    const [x0,y0]=p(a0,r),[x1,y1]=p(a1,r),[x2,y2]=p(a1,ir),[x3,y3]=p(a0,ir);
-    s+=`<path d="M${x0} ${y0} A${r} ${r} 0 ${large} 1 ${x1} ${y1} L${x2} ${y2} A${ir} ${ir} 0 ${large} 0 ${x3} ${y3} Z" fill="${c}"/>`;
-    a0=a1;
+    if(d.v<=0) return;
+    const c=palette[i%palette.length];
+    const frac=d.v/total;
+    if(frac>=0.9999 || nonZero.length===1){
+      const rm=(r+ir)/2;
+      svg+=`<circle cx="${cx}" cy="${cy}" r="${rm}" fill="none" stroke="${c}" stroke-width="${r-ir}"/>`;
+    } else {
+      const a1=a0+frac*Math.PI*2;
+      const large=(a1-a0)>Math.PI?1:0;
+      const p=(ang,rad)=>[cx+rad*Math.cos(ang), cy+rad*Math.sin(ang)];
+      const [x0,y0]=p(a0,r),[x1,y1]=p(a1,r),[x2,y2]=p(a1,ir),[x3,y3]=p(a0,ir);
+      svg+=`<path d="M${x0} ${y0} A${r} ${r} 0 ${large} 1 ${x1} ${y1} L${x2} ${y2} A${ir} ${ir} 0 ${large} 0 ${x3} ${y3} Z" fill="${c}" stroke="#ffffff" stroke-width="2"/>`;
+      a0=a1;
+    }
   });
-  s+=`<text x="${cx}" y="${cy-4}" text-anchor="middle" font-size="22" font-weight="800" fill="#17233a">${fmt(opt.center??total)}</text>`;
-  s+=`<text x="${cx}" y="${cy+16}" text-anchor="middle" font-size="10.5" fill="#68758c">${esc(opt.centerLabel||'')}</text>`;
-  let ly=S-4;
+  const centerTxt=opt.center!==undefined ? fmt(opt.center)+(opt.centerSuffix||'') : fmt(total);
+  svg+=`<text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="22" font-weight="700" fill="#0f172a">${esc(centerTxt)}</text>`;
+  if(opt.centerLabel){
+    svg+=`<text x="${cx}" y="${cy+18}" text-anchor="middle" direction="rtl" font-size="11" fill="#475569">${esc(opt.centerLabel)}</text>`;
+  }
+  svg+='</svg>';
+
+  let legend='<div class="donut-legend">';
   data.forEach((d,i)=>{
-    const col=i%2, row=Math.floor(i/2);
-    const lx=col? 18: 118, yy=ly+row*18;
-    s+=`<rect x="${lx}" y="${yy-9}" width="10" height="10" rx="3" fill="${COLORS[i%COLORS.length]}"/>`;
-    s+=`<text x="${lx+14}" y="${yy}" font-size="10.5" fill="#26374f">${esc(trunc(d.t,18))} (${fmt(d.v)})</text>`;
+    const c=palette[i%palette.length];
+    const pct=total>0 ? Math.round((d.v/total)*100) : 0;
+    const unit=opt.unit||'';
+    legend+=`<div class="donut-item">`+
+      `<span class="donut-item-lbl"><span class="donut-dot" style="background:${c}"></span><span class="donut-name">${esc(d.t)}</span></span>`+
+      `<span class="donut-meta"><b>${fmt(d.v)}${esc(unit)}</b> (${pct}%)</span>`+
+    `</div>`;
   });
-  return s+'</svg>';
+  legend+='</div>';
+  return `<div class="donut-wrap">${svg}${legend}</div>`;
 }
 
 /* حبابی Value-Effort */
 function bubbles(pts){
   if(!pts.length) return emptyBox('داده‌ای برای نمایش نیست');
-  const W=520,H=260,padL=44,padR=16,padT=16,padB=40;
+  const W=520,H=270,padL=46,padR=18,padT=26,padB=44;
   const maxX=7.5,minX=.5,maxY=7.5,minY=.5;
   const maxH=Math.max(...pts.map(p=>p.h),1);
   const X=v=>padL+(W-padL-padR)*(v-minX)/(maxX-minX);
   const Y=v=>H-padB-(H-padT-padB)*(v-minY)/(maxY-minY);
-  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="direction:ltr">`;
   for(let g=1;g<=7;g++){
-    s+=`<line x1="${X(g)}" y1="${padT}" x2="${X(g)}" y2="${H-padB}" stroke="#f1f4f9"/>`;
-    s+=`<line x1="${padL}" y1="${Y(g)}" x2="${W-padR}" y2="${Y(g)}" stroke="#f1f4f9"/>`;
-    s+=`<text x="${X(g)}" y="${H-padB+15}" text-anchor="middle" font-size="10" fill="#9aa5b8">${g}</text>`;
-    s+=`<text x="${padL-8}" y="${Y(g)+4}" text-anchor="end" font-size="10" fill="#9aa5b8">${g}</text>`;
+    s+=`<line x1="${X(g)}" y1="${padT}" x2="${X(g)}" y2="${H-padB}" stroke="#e2e8f0" stroke-opacity=".75"/>`;
+    s+=`<line x1="${padL}" y1="${Y(g)}" x2="${W-padR}" y2="${Y(g)}" stroke="#e2e8f0" stroke-opacity=".75"/>`;
+    s+=`<text x="${X(g)}" y="${H-padB+16}" text-anchor="middle" font-size="10.5" fill="#475569">${g}</text>`;
+    s+=`<text x="${padL-9}" y="${Y(g)+4}" text-anchor="end" font-size="10.5" fill="#475569">${g}</text>`;
   }
+  s+=`<line x1="${X(4.5)}" y1="${padT}" x2="${X(4.5)}" y2="${H-padB}" stroke="#94a3b8" stroke-dasharray="4 4"/>`;
+  s+=`<line x1="${padL}" y1="${Y(4.5)}" x2="${W-padR}" y2="${Y(4.5)}" stroke="#94a3b8" stroke-dasharray="4 4"/>`;
   pts.forEach((p,i)=>{
     const rad=8+22*Math.sqrt(p.h/maxH);
-    s+=`<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="${rad}" fill="${COLORS[i%COLORS.length]}" opacity=".55" stroke="${COLORS[i%COLORS.length]}"/>`;
-    if(p.h>=maxH*0.08) s+=`<text x="${X(p.x)}" y="${Y(p.y)+3}" text-anchor="middle" font-size="8.5" fill="#fff" font-weight="700">${fmt(p.h)}</text>`;
+    const col=COLORS[i%COLORS.length];
+    s+=`<g><title>${esc(p.t)}: ${fmt(p.h)} ساعت (ارزش ${p.x} · تلاش ${p.y})</title>`;
+    s+=`<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="${rad}" fill="${col}" fill-opacity=".68" stroke="#ffffff" stroke-width="1.5"/>`;
+    s+=`<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="${rad}" fill="none" stroke="${col}" stroke-width="1.2"/>`;
+    if(p.h>=maxH*0.08) s+=`<text x="${X(p.x)}" y="${Y(p.y)+3.5}" text-anchor="middle" font-size="9.5" fill="#fff" font-weight="700" style="text-shadow:0 1px 2px rgba(15,23,42,.55)">${fmt(p.h)}</text>`;
+    s+=`</g>`;
   });
-  s+=`<text x="${W/2}" y="${H-6}" text-anchor="middle" font-size="11" fill="#68758c">Value Score →</text>`;
-  s+=`<text x="14" y="${padT+4}" font-size="11" fill="#68758c">↑ Effort</text>`;
+  s+=`<text x="${(padL+W-padR)/2}" y="${H-6}" text-anchor="middle" font-size="11.5" font-weight="700" fill="#334155">Value Score (ارزش) →</text>`;
+  s+=`<text x="${padL}" y="14" text-anchor="start" font-size="11.5" font-weight="700" fill="#334155">↑ Effort (تلاش)</text>`;
   return s+'</svg>';
 }
 
@@ -341,9 +378,9 @@ function render(){
   const subPct=rk.length? Math.round(subm.length/rk.length*100):0;
 
   $('#kpiHours').textContent=fmt(hours);
-  $('#kpiHoursD').innerHTML= prevH? `<span class="${mom>=0?'up':'down'}">${mom>=0?'▲':'▼'} ${fmt(Math.abs(mom))}%</span> <span style="color:#9aa5b8">ماه قبل: ${fmt(prevH)}</span>` : '<span style="color:#9aa5b8">ماه قبل: —</span>';
+  $('#kpiHoursD').innerHTML= prevH? `<span class="${mom>=0?'up':'down'}">${mom>=0?'▲':'▼'} ${fmt(Math.abs(mom))}%</span> <span style="color:var(--muted)">ماه قبل: ${fmt(prevH)}</span>` : '<span style="color:var(--muted)">ماه قبل: —</span>';
   $('#kpiMom').textContent= mom===null? '—' : (mom>=0?'+':'')+fmt(mom)+'%';
-  $('#kpiMom').style.color= mom===null? '' : (mom>=0?'#12b886':'#e03131');
+  $('#kpiMom').style.color= mom===null? '' : (mom>=0?'#059669':'#dc2626');
   $('#kpiMomD').textContent= mom===null? 'ماه قبل داده‌ای ندارد' : `${FA_MONTHS[pm-1]} ${py}${state.demo?' ('+demoPeriodLabel(py*100+pm)+')':''}: ${fmt(prevH)} نفرساعت`;
   $('#kpiPeople').textContent=fmt(people);
   $('#kpiPeopleD').textContent=`از ${rk.length} نفر کل دپارتمان(ها)`;
@@ -364,7 +401,7 @@ function render(){
   $('#chSub').innerHTML=donut([
       {t:'گزارش داده‌اند', v:submitted},
       {t:'گزارش نداده‌اند', v:missing},
-    ], {center:subPct, centerLabel:'درصد گزارش‌دهی'});
+    ], {center:subPct, centerSuffix:'%', centerLabel:'درصد گزارش‌دهی', colors:['#10b981','#f43f5e'], unit:' نفر'});
 
   // ---- دپارتمان‌ها ----
   const deptAgg={};
@@ -885,6 +922,24 @@ document.addEventListener('DOMContentLoaded', ()=>{
     finally{ $('#btnLogin').disabled=false; }
   };
   $('#authPass').onkeydown=e=>{ if(e.key==='Enter') $('#btnLogin').click(); };
+
+  // سوییچر دو طرح پیش‌زمینه
+  const setBgTheme = bg => {
+    const next = bg === 'energy' ? 'energy' : 'blueprint';
+    document.body.dataset.bg = next;
+    document.querySelectorAll('[data-bg-choice]').forEach(btn => {
+      const active = btn.dataset.bgChoice === next;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
+    try{ localStorage.setItem('engkpi_bg', next); }catch(e){}
+  };
+  let savedBg = null;
+  try{ savedBg = localStorage.getItem('engkpi_bg'); }catch(e){}
+  setBgTheme(savedBg || 'blueprint');
+  document.querySelectorAll('[data-bg-choice]').forEach(btn => {
+    btn.onclick = () => setBgTheme(btn.dataset.bgChoice);
+  });
 
   // راه‌انداز: بازیابی نشست قبلی یا نمایش صفحه ورود
   (async()=>{
