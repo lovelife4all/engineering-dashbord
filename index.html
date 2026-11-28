@@ -13,9 +13,9 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css?v=charts13">
-<link rel="stylesheet" href="management.css?v=charts13">
-<link rel="stylesheet" href="industry.css?v=charts13">
+<link rel="stylesheet" href="style.css?v=control14">
+<link rel="stylesheet" href="management.css?v=control14">
+<link rel="stylesheet" href="industry.css?v=control14">
 </head>
 <body>
 
@@ -85,6 +85,15 @@
 
 <section class="scope-note" id="scopeNote" hidden></section>
 
+<section class="management-hero" id="managementHero" aria-labelledby="managementHeroTitle" hidden>
+  <div>
+    <p class="management-org">شرکت مهندسی و توسعه گاز ایران</p>
+    <h2 id="managementHeroTitle">خلاصهٔ ماه مدیریت</h2>
+    <p class="management-period"><strong id="managementMonth"></strong><span id="managementPeriod"></span></p>
+  </div>
+  <span class="catalog-pill" id="managementCoverage"></span>
+</section>
+
 <!-- ============ فیلترها ============ -->
 <section class="filters" id="filters">
   <label>ماه
@@ -104,20 +113,18 @@
 <main id="tab-dash" class="tabpane active">
 
   <section class="management-overview" id="managementOverview" hidden>
-    <div class="card management-header">
-      <div class="section-head management-hero"><div><p class="management-org">شرکت مهندسی و توسعه گاز ایران</p><h2>خلاصهٔ ماه مدیریت</h2><p class="hint" id="managementPeriod"></p></div>
-        <span class="catalog-pill" id="managementCoverage"></span>
-      </div>
-      <div class="management-kpis" id="managementKpis"></div>
+    <div class="management-kpis" id="managementKpis"></div>
+    <div class="card management-followups">
+      <div class="management-panel-heading"><h3>موارد نیازمند پیگیری</h3><span id="managementActionCount" class="management-action-count" hidden></span></div>
+      <div class="tblwrap" id="managementActions"></div>
     </div>
-    <div class="card management-followups"><h3>موارد نیازمند پیگیری</h3><div class="tblwrap" id="managementActions"></div></div>
     <div class="card management-unit-panel"><h3>مقایسهٔ واحدها</h3><div class="tblwrap" id="managementUnits"></div></div>
     <div class="card management-trend-panel"><h3>روند ۱۲ ماهه تا دورهٔ انتخابی</h3>
-      <h4>نفرساعت</h4>
-      <label class="chart-view-control"><span>نوع نمودار</span><select id="managementHoursTrendView" data-chart-view aria-label="نوع نمودار روند نفرساعت" aria-controls="managementHoursTrend"><option value="pie">دایره‌ای</option><option value="bar" selected>میله‌ای</option></select></label>
+      <div class="chart-heading"><h4>نفرساعت</h4>
+        <label class="chart-view-control"><span>نوع نمودار</span><select id="managementHoursTrendView" data-chart-view aria-label="نوع نمودار روند نفرساعت" aria-controls="managementHoursTrend"><option value="pie">دایره‌ای</option><option value="bar" selected>میله‌ای</option></select></label></div>
       <div class="chart management-trend" id="managementHoursTrend"></div>
-      <h4>تعداد فعالیت</h4>
-      <label class="chart-view-control"><span>نوع نمودار</span><select id="managementEventsTrendView" data-chart-view aria-label="نوع نمودار روند تعداد فعالیت" aria-controls="managementEventsTrend"><option value="pie">دایره‌ای</option><option value="bar" selected>میله‌ای</option></select></label>
+      <div class="chart-heading"><h4>تعداد فعالیت</h4>
+        <label class="chart-view-control"><span>نوع نمودار</span><select id="managementEventsTrendView" data-chart-view aria-label="نوع نمودار روند تعداد فعالیت" aria-controls="managementEventsTrend"><option value="pie">دایره‌ای</option><option value="bar" selected>میله‌ای</option></select></label></div>
       <div class="chart management-trend" id="managementEventsTrend"></div>
       <div class="management-trend" id="managementTrend"></div>
       <p class="hint">وضعیت هر ماه بر اساس گزارش‌های نهایی و فهرست فعلی پرسنل است.</p>
@@ -134,24 +141,24 @@
 
   <section class="grid">
     <div class="card management-legacy c2">
-      <h3>روند ماهانه نفرساعت و تعداد فعالیت <span class="hint" id="trendDemoLabel" hidden>· مقایسهٔ داده‌های آزمایشی با شهریور واقعی</span></h3>
-      <label class="chart-view-control"><span>نوع نمودار</span><select id="chTrendView" data-chart-view aria-label="نوع نمودار روند ماهانه" aria-controls="chTrend"><option value="pie">دایره‌ای</option><option value="bar" selected>میله‌ای</option></select></label>
+      <div class="chart-heading"><h3>روند ماهانه نفرساعت و تعداد فعالیت <span class="hint" id="trendDemoLabel" hidden>· مقایسهٔ داده‌های آزمایشی با شهریور واقعی</span></h3>
+        <label class="chart-view-control"><span>نوع نمودار</span><select id="chTrendView" data-chart-view aria-label="نوع نمودار روند ماهانه" aria-controls="chTrend"><option value="pie">دایره‌ای</option><option value="bar" selected>میله‌ای</option></select></label></div>
       <div id="chTrend" class="chart"></div>
     </div>
     <div class="card management-legacy">
-      <h3>وضعیت گزارش‌دهی ماه</h3>
-      <label class="chart-view-control"><span>نوع نمودار</span><select id="chSubView" data-chart-view aria-label="نوع نمودار وضعیت گزارش‌دهی" aria-controls="chSub"><option value="pie" selected>دایره‌ای</option><option value="bar">میله‌ای</option></select></label>
+      <div class="chart-heading"><h3>وضعیت گزارش‌دهی ماه</h3>
+        <label class="chart-view-control"><span>نوع نمودار</span><select id="chSubView" data-chart-view aria-label="نوع نمودار وضعیت گزارش‌دهی" aria-controls="chSub"><option value="pie" selected>دایره‌ای</option><option value="bar">میله‌ای</option></select></label></div>
       <div id="chSub" class="chart"></div>
     </div>
     <div class="card management-legacy c2">
-      <h3>بار دپارتمان‌ها در مقابل ظرفیت (۱۸۰ ساعت/نفر) <span class="hint">· در کنار هر نوار، تعداد فعالیت</span></h3>
-      <label class="chart-view-control"><span>نوع نمودار</span><select id="chDeptView" data-chart-view aria-label="نوع نمودار بار دپارتمان‌ها" aria-controls="chDept"><option value="pie">دایره‌ای</option><option value="bar" selected>میله‌ای</option></select></label>
+      <div class="chart-heading"><h3>بار دپارتمان‌ها در مقابل ظرفیت (۱۸۰ ساعت/نفر) <span class="hint">· در کنار هر نوار، تعداد فعالیت</span></h3>
+        <label class="chart-view-control"><span>نوع نمودار</span><select id="chDeptView" data-chart-view aria-label="نوع نمودار بار دپارتمان‌ها" aria-controls="chDept"><option value="pie">دایره‌ای</option><option value="bar" selected>میله‌ای</option></select></label></div>
       <div id="chDept" class="chart"></div>
     </div>
     <details class="card c3" id="valueEffortDetails" open>
       <summary>تحلیل ارزش و تلاش</summary>
-      <div class="card"><h3>Value در مقابل Effort <span class="hint">(حجم = نفرساعت · تعداد در راهنما)</span></h3>
-      <label class="chart-view-control"><span>نوع نمودار</span><select id="chVEView" data-chart-view aria-label="نوع نمودار ارزش و تلاش" aria-controls="chVE"><option value="pie">دایره‌ای</option><option value="bar">میله‌ای</option><option value="bubble" selected>حبابی</option></select></label>
+      <div class="card"><div class="chart-heading"><h3>Value در مقابل Effort <span class="hint">(حجم = نفرساعت · تعداد در راهنما)</span></h3>
+        <label class="chart-view-control"><span>نوع نمودار</span><select id="chVEView" data-chart-view aria-label="نوع نمودار ارزش و تلاش" aria-controls="chVE"><option value="pie">دایره‌ای</option><option value="bar">میله‌ای</option><option value="bubble" selected>حبابی</option></select></label></div>
       <div id="chVE" class="chart"></div></div>
       <div class="card c3"><h3>اولویت‌بندی ارزش و تلاش</h3>
       <p class="hint">Value: امتیاز ۵ تا ۷ «بالا» و ۱ تا ۴ «پایین»؛ Effort: امتیاز ۶ تا ۱۰ «بالا» و ۱ تا ۵ «پایین» است. سهم هر بخش از کل نفرساعت همین فیلتر محاسبه می‌شود؛ پیشنهادها برای بازبینی فعالیت‌اند، نه رتبه‌بندی افراد.</p>
@@ -167,18 +174,18 @@
       </section>
     </div>
     <div class="card c2">
-      <h3>نفرساعت و تعداد فعالیت به تفکیک فعالیت</h3>
-      <label class="chart-view-control"><span>نوع نمودار</span><select id="chActView" data-chart-view aria-label="نوع نمودار فعالیت‌ها" aria-controls="chAct"><option value="pie">دایره‌ای</option><option value="bar" selected>میله‌ای</option></select></label>
+      <div class="chart-heading"><h3>نفرساعت و تعداد فعالیت به تفکیک فعالیت</h3>
+        <label class="chart-view-control"><span>نوع نمودار</span><select id="chActView" data-chart-view aria-label="نوع نمودار فعالیت‌ها" aria-controls="chAct"><option value="pie">دایره‌ای</option><option value="bar" selected>میله‌ای</option></select></label></div>
       <div id="chAct" class="chart"></div>
     </div>
     <div class="card c2">
-      <h3>مقایسه ذینفعان (نفرساعت و تعداد فعالیت)</h3>
-      <label class="chart-view-control"><span>نوع نمودار</span><select id="chStkView" data-chart-view aria-label="نوع نمودار ذی‌نفعان" aria-controls="chStk"><option value="pie">دایره‌ای</option><option value="bar" selected>میله‌ای</option></select></label>
+      <div class="chart-heading"><h3>مقایسه ذینفعان (نفرساعت و تعداد فعالیت)</h3>
+        <label class="chart-view-control"><span>نوع نمودار</span><select id="chStkView" data-chart-view aria-label="نوع نمودار ذی‌نفعان" aria-controls="chStk"><option value="pie">دایره‌ای</option><option value="bar" selected>میله‌ای</option></select></label></div>
       <div id="chStk" class="chart"></div>
     </div>
     <div class="card source-share-card">
-      <h3>سهم منابع ثبت</h3>
-      <label class="chart-view-control"><span>نوع نمودار</span><select id="chSrcView" data-chart-view aria-label="نوع نمودار سهم منابع ثبت" aria-controls="chSrc"><option value="pie" selected>دایره‌ای</option><option value="bar">میله‌ای</option></select></label>
+      <div class="chart-heading"><h3>سهم منابع ثبت</h3>
+        <label class="chart-view-control"><span>نوع نمودار</span><select id="chSrcView" data-chart-view aria-label="نوع نمودار سهم منابع ثبت" aria-controls="chSrc"><option value="pie" selected>دایره‌ای</option><option value="bar">میله‌ای</option></select></label></div>
       <div id="chSrc" class="chart"></div>
     </div>
   </section>
@@ -383,7 +390,7 @@ admin2@company.ir | admin | رمزاختیاری"></textarea>
 
 <article id="printReport" class="print-report" dir="rtl" aria-label="گزارش قابل چاپ"></article>
 
-<script src="config.js?v=charts13"></script>
-<script src="app.js?v=charts13"></script>
+<script src="config.js?v=control14"></script>
+<script src="app.js?v=control14"></script>
 </body>
 </html>

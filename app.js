@@ -730,10 +730,17 @@ function managementSummary(data, month, department, person){
   return {current,previous,units,trend,latestSubmission};
 }
 
+function managementDelta(current,previous,key){
+  if(key==='coverage') return current.coverage==null||previous.coverage==null?null:current.coverage-previous.coverage;
+  if(!current.submitted||!previous.submitted||!previous[key]) return null;
+  return Math.round(10000*(current[key]-previous[key])/previous[key])/100;
+}
+
 function managementChange(current, previous, key){
-  if(!current.submitted||!previous.submitted||!previous[key]) return '—';
-  const delta=100*(current[key]-previous[key])/previous[key];
-  return `${delta>0?'+':''}${faN(delta)}٪`;
+  const delta=managementDelta(current,previous,key);
+  if(delta==null) return '—';
+  const suffix=key==='coverage'?' واحد درصد':'٪';
+  return `${delta>0?'+':''}${faN(delta)}${suffix}`;
 }
 
 function managementActions(report, portfolio, lowValue){
@@ -756,13 +763,13 @@ function managementActions(report, portfolio, lowValue){
 
 function managementKpis(report){
   const {current,previous}=report;
-  return [
-    {name:'نفرساعت نهایی',value:current.submitted?faN(current.hours):'—',detail:managementChange(current,previous,'hours')},
-    {name:'تعداد فعالیت',value:current.submitted?faN(current.events):'—',detail:managementChange(current,previous,'events')},
-    {name:'مدرک / موضوع بررسی‌شده',value:current.submitted?faN(current.docs):'—',detail:managementChange(current,previous,'docs')},
-    {name:'پوشش گزارش‌دهی',value:current.coverage==null?'—':`${faN(current.coverage)}٪`,
-      detail:current.coverage==null||previous.coverage==null?'—':`${faN(current.coverage-previous.coverage)} واحد درصد`}
-  ];
+  const labels={hours:'نفرساعت نهایی',events:'تعداد فعالیت',docs:'مدرک / موضوع بررسی‌شده',coverage:'پوشش گزارش‌دهی'};
+  return Object.entries(labels).map(([key,name])=>({
+    name,
+    value:key==='coverage'?(current.coverage==null?'—':`${faN(current.coverage)}٪`):(current.submitted?faN(current[key]):'—'),
+    detail:managementChange(current,previous,key),
+    delta:managementDelta(current,previous,key)
+  }));
 }
 
 function managementTable(headers, rows, empty){
@@ -782,25 +789,34 @@ function managementUnitsTable(report, limit=report.units.length){
 function managementActionsTable(actions, interactive){
   const rows=actions.map(action=>[
     esc(action.topic),
-    interactive&&action.dept?`<button type="button" class="ghost management-action" data-management-dept="${esc(action.dept)}">${esc(action.scope)}</button>`:esc(action.scope),
-    esc(action.reason),esc(action.owner),esc(action.status)
+    interactive&&action.dept?`<button type="button" class="management-action" data-management-dept="${esc(action.dept)}">${esc(action.scope)}</button>`:esc(action.scope),
+    esc(action.reason),esc(action.owner),
+    interactive?`<span class="management-action-status">${esc(action.status)}</span>`:esc(action.status)
   ]);
   return managementTable(['موضوع','واحد / دامنه','علت','نقش پیگیر','وضعیت'],rows,'موردی برای پیگیری در این محدوده شناسایی نشد.');
 }
 
-function managementPeriodText(report){
-  const period=$('#fMonth').selectedOptions[0]?.textContent||'—';
+function managementMonthText(){
+  const year=Math.floor(state.month/100), month=state.month%100;
+  return `${FA_MONTHS[month-1]} ${year.toLocaleString('fa-IR',{useGrouping:false})}`;
+}
+
+function managementUpdateText(report){
   const date=new Intl.DateTimeFormat('fa-IR-u-ca-persian',
     {dateStyle:'short',timeStyle:'short',timeZone:'Asia/Tehran'});
-  const last=report.latestSubmission?`آخرین ارسال نهایی ${date.format(report.latestSubmission)}`:
+  return report.latestSubmission?`آخرین ارسال نهایی ${date.format(report.latestSubmission)}`:
     state.loadedAt?`زمان بازیابی ${date.format(state.loadedAt)}`:'';
-  return [period,'گزارش‌های نهایی',last].filter(Boolean).join(' · ');
+}
+
+function managementPeriodText(report){
+  return [managementMonthText(),'گزارش‌های نهایی',managementUpdateText(report)].filter(Boolean).join(' · ');
 }
 
 function renderManagement(){
   const show=officialManagement();
   $('#tab-dash').dataset.management=String(show);
   $('#managementOverview').hidden=!show;
+  $('#managementHero').hidden=!show||state.tab!=='dash';
   $('#kpis').hidden=show;
   const details=$('#valueEffortDetails');
   if(details.dataset.management!==String(show)){
@@ -811,12 +827,20 @@ function renderManagement(){
   const report=managementSummary(state,state.month,state.dept,state.person);
   const actions=managementActions(report,printMetrics.portfolio,printMetrics.groups[2]);
   managementReport={report,actions};
-  $('#managementPeriod').textContent=managementPeriodText(report);
+  $('#managementMonth').textContent=managementMonthText();
+  $('#managementPeriod').textContent=managementUpdateText(report);
   const {submitted,eligible}=report.current;
   $('#managementCoverage').textContent=`${faN(submitted)} گزارش نهایی از ${faN(eligible)} نفر مشمول*`;
-  $('#managementKpis').innerHTML=managementKpis(report).map(kpi=>
-    `<div class="kpi"><div class="kpi-v">${esc(kpi.value)}</div><div class="kpi-l">${esc(kpi.name)}</div><div class="kpi-d">ماه قبل · ${esc(kpi.detail)}</div></div>`
-  ).join('');
+  $('#managementKpis').innerHTML=managementKpis(report).map(kpi=>{
+    const direction=kpi.delta>0?'up':kpi.delta<0?'down':'flat';
+    const arrow=kpi.delta>0?'↑':kpi.delta<0?'↓':'';
+    return `<div class="kpi"><div class="kpi-l">${esc(kpi.name)}</div><div class="kpi-v">${esc(kpi.value)}</div>`+
+      `<div class="kpi-d">ماه قبل <span class="management-delta" data-trend="${direction}">`+
+      `<span aria-hidden="true">${arrow}</span> ${esc(kpi.detail)}</span></div></div>`;
+  }).join('');
+  const actionCount=$('#managementActionCount');
+  actionCount.hidden=!actions.length;
+  actionCount.textContent=`${faN(actions.length)} مورد`;
   $('#managementActions').innerHTML=managementActionsTable(actions,true);
   $('#managementUnits').innerHTML=managementUnitsTable(report)+
     '<p class="hint">* مخرج از فهرست فعال فعلی و گزارش‌دهندگان نهایی همان دوره محاسبه می‌شود. آمار تاریخی با تغییر فهرست پرسنل قابل تغییر است.</p>';
@@ -1369,6 +1393,7 @@ function selectTab(tab){
   document.querySelectorAll('.tab[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
   state.tab=tab;
+  $('#managementHero').hidden=tab!=='dash'||!officialManagement();
   $('#btnPrint').hidden=tab!=='dash'||!['admin','management','head'].includes(state.role);
   if(tab!=='dash') exitDemo();
   updateDemoUi();
@@ -1416,8 +1441,10 @@ function resetUi(){
   if($('#qualityDialog').open) $('#qualityDialog').close();
   printMetrics=null;managementReport=null;
   $('#managementOverview').hidden=true;
+  $('#managementHero').hidden=true;
+  $('#managementActionCount').hidden=true;
   $('#managementProjectSection').hidden=true;
-  for(const id of ['managementPeriod','managementCoverage','managementKpis','managementActions','managementUnits','managementTrend','managementProject','managementProjectTable']){
+  for(const id of ['managementMonth','managementPeriod','managementCoverage','managementActionCount','managementKpis','managementActions','managementUnits','managementTrend','managementProject','managementProjectTable']){
     document.getElementById(id).textContent='';
   }
   $('#printReport').removeAttribute('data-ready');$('#printReport').textContent='';
