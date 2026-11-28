@@ -329,7 +329,7 @@ function vbar(data, opt={}){
 }
 
 /* دایره‌ای (دونات) — حلقه SVG تمیز + راهنمای خوانای RTL */
-function sourceDonutLayout(data,total){
+function sourceDonutLayout(data,total,radius){
   const sides=[[],[]];
   let start=-Math.PI/2;
   const empty=[];
@@ -344,13 +344,13 @@ function sourceDonutLayout(data,total){
     sides[sides[0].length<=sides[1].length?0:1].push({...point,sin:2});
   }
   const spacing=45;
-  const height=Math.max(158,(Math.max(...sides.map(side=>side.length))-1)*spacing+49);
+  const height=Math.max(180,(Math.max(...sides.map(side=>side.length))-1)*spacing+49);
   const labels=sides.flatMap((side,sideIndex)=>{
     const direction=sideIndex===0?-1:1;
     const sorted=side.sort((a,b)=>a.sin-b.sin);
     let bottom=-Infinity;
     return sorted.map((point,i)=>{
-      const target=height/2+point.sin*46;
+      const target=height/2+point.sin*radius;
       const upper=height-24-(sorted.length-1-i)*spacing;
       const y=Math.min(upper,Math.max(22,bottom+spacing,target));
       bottom=y;
@@ -363,9 +363,10 @@ function sourceDonutLayout(data,total){
 function donut(data, opt={}){
   const total=data.reduce((a,d)=>a+d.v,0);
   if(!data.length||(!total&&!opt.around)) return emptyBox('داده‌ای برای نمایش نیست');
-  const layout=opt.around?sourceDonutLayout(data,total):null;
+  const r=opt.around?69:68, ir=45;
+  const layout=opt.around?sourceDonutLayout(data,total,r):null;
   const width=layout?.width||180, height=layout?.height||180;
-  const cx=width/2, cy=height/2, r=layout?46:68, ir=layout?30:45;
+  const cx=width/2, cy=height/2;
   const palette=opt.colors||COLORS;
   let a0=-Math.PI/2;
   let svg=layout
@@ -396,36 +397,36 @@ function donut(data, opt={}){
   }
   if(layout){
     for(const {row,index,angle,direction,y} of layout.labels){
-      const color=palette[index%palette.length], x=cx+direction*116;
+      const color=palette[index%palette.length], x=cx+direction*121;
       const share=total?percent(row.v,total):0;
       const percentage=share>0&&share<0.01?'کمتر از ۰٫۰۱٪':`${faN(share)}٪`;
       if(angle!==undefined){
         const ax=cx+(r+2)*Math.cos(angle), ay=cy+(r+2)*Math.sin(angle);
-        svg+=`<path class="source-donut-leader" d="M${ax} ${ay} L${cx+direction*52} ${ay} L${cx+direction*65} ${y}" stroke="${color}" fill="none"/>`;
+        svg+=`<path class="source-donut-leader" d="M${ax} ${ay} L${cx+direction*72} ${ay} L${cx+direction*77} ${y}" stroke="${color}" fill="none"/>`;
       }
       svg+=`<text x="${x}" y="${y-9}" class="source-donut-label" text-anchor="middle" direction="rtl">`+
         `<tspan x="${x}" class="source-donut-name">${esc(row.t)}</tspan>`+
         `<tspan x="${x}" dy="13" class="source-donut-value">${faN(row.v)} ساعت · ${esc(percentage)}</tspan>`+
         `<tspan x="${x}" dy="12" class="source-donut-count">${actLabel(row.n)}</tspan></text>`;
     }
-    return svg+'</svg>';
   }
   svg+='</svg>';
 
   let legend='<div class="donut-legend">';
   data.forEach((d,i)=>{
     const c=palette[i%palette.length];
-    const pct=total>0 ? Math.round((d.v/total)*100) : 0;
+    const pct=total>0?percent(d.v,total):0;
+    const share=pct>0&&pct<0.01?'کمتر از ۰٫۰۱٪':`${faN(pct)}٪`;
     const unit=opt.unit||'';
     legend+=`<div class="donut-item">`+
       `<span class="donut-item-lbl"><span class="donut-dot" style="background:${c}"></span><span class="donut-name">${esc(d.t)}</span></span>`+
-      `<span class="donut-meta"><b>${fmt(d.v)}${esc(unit)}</b> (${pct}%)`+
+      `<span class="donut-meta"><b>${fmt(d.v)}${esc(unit)}</b> (${esc(share)})`+
         (d.n!=null?`<small class="donut-count">${actLabel(d.n)}</small>`:'')+
       `</span>`+
     `</div>`;
   });
   legend+='</div>';
-  return `<div class="donut-wrap">${svg}${legend}</div>`;
+  return `<div class="donut-wrap${layout?' source-donut-wrap':''}">${svg}${legend}</div>`;
 }
 
 /* حبابی Value-Effort */
@@ -462,6 +463,27 @@ function bubbles(pts){
 }
 
 /* ================= رندر داشبورد ================= */
+function renderSelectableChart(id,rows,options={}){
+  const selected=$(`#${id}View`).value;
+  const {unit=' ساعت',vertical=false,axisUnit='نفرساعت',colors,bubbleRows,barOptions={},pieOptions={}}=options;
+  let html;
+  if(selected==='bubble'){
+    html=bubbles(bubbleRows);
+  }else if(selected==='pie'){
+    const visible=rows.filter(row=>row.v!=null).map(row=>({
+      ...row,t:row.t2?`${row.t} ${row.t2}`:row.t
+    }));
+    html=donut(visible,{unit,colors,...pieOptions});
+  }else if(vertical){
+    html=vbar(rows,{unit:axisUnit,...barOptions});
+  }else{
+    const colored=colors?rows.map((row,i)=>({...row,c:colors[i%colors.length]})):rows;
+    html=hbar(colored,{unit,...barOptions});
+  }
+  const target=$(`#${id}`);
+  target.innerHTML=html;
+}
+
 function render(){
   updateDemoUi();
   updateScopeNote();
@@ -503,14 +525,15 @@ function render(){
   allMonth.forEach(l=>{const k=l.period_year*100+l.period_month; if(!byM[k]) byM[k]={hours:0,count:0}; byM[k].hours+=Number(l.hours)||0; byM[k].count+=countOf(l);});
   const trend=(state.demo?DEMO_MONTHS:Object.keys(byM).sort().map(Number)).map(k=>({t:FA_MONTHS[k%100-1], t2:state.demo?demoPeriodLabel(k):Math.floor(k/100),
     v:(byM[k]||{}).hours||0, n:(byM[k]||{}).count||0, c:state.demo&&k!==140506?(k===state.month?'#ac5d06':'#cf8b35'):(k===state.month||state.demo?'#1d5bd8':'#9db8ec')}));
-  if(!officialManagement()) $('#chTrend').innerHTML=vbar(trend);
+  if(!officialManagement()) renderSelectableChart('chTrend',trend,{vertical:true});
 
   // ---- گزارش‌دهی ----
   const submitted=subm.length, missing=Math.max(rk.length-subm.length,0);
-  $('#chSub').innerHTML=donut([
-      {t:'گزارش داده‌اند', v:submitted},
-      {t:'گزارش نداده‌اند', v:missing},
-    ], {center:subPct, centerSuffix:'%', centerLabel:'درصد گزارش‌دهی', colors:['#10b981','#f43f5e'], unit:' نفر'});
+  renderSelectableChart('chSub',[
+    {t:'گزارش داده‌اند',v:submitted},
+    {t:'گزارش نداده‌اند',v:missing},
+  ],{unit:' نفر',colors:['#10b981','#f43f5e'],
+    pieOptions:{center:subPct,centerSuffix:'%',centerLabel:'درصد گزارش‌دهی'}});
 
   // ---- دپارتمان‌ها ----
   const deptAgg={};
@@ -523,7 +546,7 @@ function render(){
     const head=data.personnel.filter(p=>p.active&&p.department.name_fa===d).length;
     return {t:d, v:a.hours, n:a.count, sub:`${faN(percent(a.hours,hours))}٪ از کل · ظرفیت ${fmt(head*180)} ساعت · ${head} نفر`};
   });
-  $('#chDept').innerHTML=hbar(deptData,{unit:' ساعت', labelW:240, rowH:38});
+  renderSelectableChart('chDept',deptData,{barOptions:{labelW:240,rowH:38}});
 
   // ---- Value-Effort ----
   const veAgg={};
@@ -534,8 +557,10 @@ function render(){
       h:0, n:0, t:(l.activity.specific_title||l.activity.general_fa)+(['admin','management'].includes(state.role)&&deptName?` · ${deptName}`:'')};
     veAgg[k].h+=Number(l.hours); veAgg[k].n+=countOf(l);
   });
-  $('#chVE').innerHTML=bubbles(Object.values(veAgg));
-  const groups=renderPriorities(Object.values(veAgg),hours);
+  const points=Object.values(veAgg);
+  const groups=renderPriorities(points,hours);
+  renderSelectableChart('chVE',groups.filter(q=>q.count).map(q=>({t:q.t,v:q.hours,n:q.events})),
+    {bubbleRows:points,colors:['#138277','#1d5bd8','#ad7228','#64748b'],barOptions:{labelW:220}});
   const portfolio=portfolioForScope(); renderPortfolio(portfolio);
 
   // ---- فعالیت‌ها ----
@@ -547,7 +572,7 @@ function render(){
   });
   const actRows=Object.entries(actAgg).sort((a,b)=>b[1].hours-a[1].hours).slice(0,12)
     .map(([t,a])=>({t,v:a.hours,n:a.count}));
-  $('#chAct').innerHTML=hbar(actRows, {unit:' ساعت', rowH:34});
+  renderSelectableChart('chAct',actRows,{barOptions:{rowH:34}});
 
   // ---- ذینفعان ----
   const stkAgg={};
@@ -556,16 +581,16 @@ function render(){
     stkAgg[k].hours+=Number(l.hours)||0; stkAgg[k].count+=countOf(l); });
   const stkRows=Object.entries(stkAgg).sort((a,b)=>b[1].hours-a[1].hours).slice(0,12)
     .map(([t,a])=>({t,v:a.hours,n:a.count}));
-  $('#chStk').innerHTML=hbar(stkRows, {unit:' ساعت', rowH:34, labelW:250});
+  renderSelectableChart('chStk',stkRows,{barOptions:{rowH:34,labelW:250}});
 
   // ---- منابع ----
   const srcAgg={};
   logs.forEach(l=>{ const k=SRC_FA[l.source]||l.source;
     if(!srcAgg[k]) srcAgg[k]={hours:0,count:0};
     srcAgg[k].hours+=Number(l.hours)||0; srcAgg[k].count+=countOf(l); });
-  $('#chSrc').innerHTML=donut(Object.entries(srcAgg).sort((a,b)=>b[1].hours-a[1].hours)
-    .map(([t,a])=>({t,v:a.hours,n:a.count})),
-    {around:true,centerLabel:'نفرساعت'});
+  const sourceRows=Object.entries(srcAgg).sort((a,b)=>b[1].hours-a[1].hours)
+    .map(([t,a])=>({t,v:a.hours,n:a.count}));
+  renderSelectableChart('chSrc',sourceRows,{pieOptions:{around:true,centerLabel:'نفرساعت'}});
 
   printMetrics={hours,events,prevH,prevCount:prev.count,docs,people,mom,submitted,
     eligible:rk.length,subPct,deptData,groups,portfolio,ve:Object.values(veAgg),act:actRows,stk:stkRows};
@@ -808,8 +833,11 @@ function renderManagement(){
     t:FA_MONTHS[m.key%100-1],t2:faN(Math.floor(m.key/100)),
     c:m.status==='پوشش کامل'?'#1d5bd8':'#ac5d06',month:m
   }));
-  const chart=(key,unit)=>vbar(series.map(d=>({...d,v:d.month.submitted?d.month[key]:null})),{w:670,unit});
-  $('#managementTrend').innerHTML=chart('hours','نفرساعت')+chart('events','فعالیت')+
+  const monthly=key=>series.map(d=>({...d,v:d.month.submitted?d.month[key]:null}));
+  renderSelectableChart('managementHoursTrend',monthly('hours'),{vertical:true,barOptions:{w:670}});
+  renderSelectableChart('managementEventsTrend',monthly('events'),
+    {vertical:true,unit:' فعالیت',axisUnit:'فعالیت',barOptions:{w:670}});
+  $('#managementTrend').innerHTML=
     `<div class="management-months">${series.map(d=>`<span>${esc(d.t)}<small>${esc(d.month.status)}</small></span>`).join('')}</div>`;
 }
 
@@ -1421,6 +1449,9 @@ function resetUi(){
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
+  document.querySelectorAll('[data-chart-view]').forEach(select=>{
+    select.addEventListener('change',render);
+  });
   document.querySelectorAll('.tab[data-tab]').forEach(b=>b.onclick=()=>selectTab(b.dataset.tab));
   $('#btnDemo').onclick=toggleDemo;
   $('#portfolioBy').onchange=()=>renderPortfolio();
