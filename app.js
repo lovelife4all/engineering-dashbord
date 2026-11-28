@@ -329,7 +329,7 @@ function vbar(data, opt={}){
 }
 
 /* دایره‌ای (دونات) — حلقه SVG تمیز + راهنمای خوانای RTL */
-function sourceDonutLayout(data,total,radius){
+function donutLabelLayout(data,total,radius){
   const sides=[[],[]];
   let start=-Math.PI/2;
   const empty=[];
@@ -344,7 +344,7 @@ function sourceDonutLayout(data,total,radius){
     sides[sides[0].length<=sides[1].length?0:1].push({...point,sin:2});
   }
   const spacing=45;
-  const height=Math.max(180,(Math.max(...sides.map(side=>side.length))-1)*spacing+49);
+  const height=Math.max(148,(Math.max(...sides.map(side=>side.length))-1)*spacing+49);
   const labels=sides.flatMap((side,sideIndex)=>{
     const direction=sideIndex===0?-1:1;
     const sorted=side.sort((a,b)=>a.sin-b.sin);
@@ -360,73 +360,64 @@ function sourceDonutLayout(data,total,radius){
   return {width:344,height,labels};
 }
 
-function donut(data, opt={}){
-  const total=data.reduce((a,d)=>a+d.v,0);
-  if(!data.length||(!total&&!opt.around)) return emptyBox('داده‌ای برای نمایش نیست');
-  const r=opt.around?69:68, ir=45;
-  const layout=opt.around?sourceDonutLayout(data,total,r):null;
-  const width=layout?.width||180, height=layout?.height||180;
+function donut(data,opt={}){
+  if(!data.length) return emptyBox('داده‌ای برای نمایش نیست');
+  const total=data.reduce((sum,row)=>sum+row.v,0);
+  // Convert the former 180-unit SVG to its 190px display scale before shrinking.
+  const scale=0.7*(opt.source?1:190/180);
+  const r=(opt.source?69:68)*scale, ir=45*scale;
+  const {width,height,labels}=donutLabelLayout(data,total,r);
   const cx=width/2, cy=height/2;
   const palette=opt.colors||COLORS;
-  let a0=-Math.PI/2;
-  let svg=layout
-    ? `<svg class="source-donut" viewBox="0 0 ${width} ${height}" direction="ltr" role="img" aria-label="سهم منابع ثبت"><desc>${data.map(d=>esc(`${d.t}، ${faN(d.v)} ساعت، ${actLabel(d.n)}`)).join('؛ ')}</desc>`
-    : `<svg class="donut-ring" viewBox="0 0 ${width} ${height}" style="direction:ltr">`;
-  if(layout&&!total) svg+=`<circle cx="${cx}" cy="${cy}" r="${(r+ir)/2}" fill="none" stroke="#dae7e4" stroke-width="${r-ir}"/>`;
-  const nonZero=data.filter(d=>d.v>0);
-  data.forEach((d,i)=>{
-    if(d.v<=0) return;
-    const c=palette[i%palette.length];
-    const frac=d.v/total;
-    if((!layout&&frac>=0.9999)||nonZero.length===1){
-      const rm=(r+ir)/2;
-      svg+=`<circle cx="${cx}" cy="${cy}" r="${rm}" fill="none" stroke="${c}" stroke-width="${r-ir}"><title>${esc(d.t)}: ${fmt(d.v)} · ${actLabel(d.n||0)}</title></circle>`;
-    } else {
-      const a1=a0+frac*Math.PI*2;
-      const large=(a1-a0)>Math.PI?1:0;
-      const p=(ang,rad)=>[cx+rad*Math.cos(ang), cy+rad*Math.sin(ang)];
-      const [x0,y0]=p(a0,r),[x1,y1]=p(a1,r),[x2,y2]=p(a1,ir),[x3,y3]=p(a0,ir);
-      svg+=`<path d="M${x0} ${y0} A${r} ${r} 0 ${large} 1 ${x1} ${y1} L${x2} ${y2} A${ir} ${ir} 0 ${large} 0 ${x3} ${y3} Z" fill="${c}" stroke="#ffffff" stroke-width="2"><title>${esc(d.t)}: ${fmt(d.v)} · ${actLabel(d.n||0)}</title></path>`;
-      a0=a1;
+  const unit=opt.unit||'';
+  const percentLabel=value=>{
+    const share=percent(value,total);
+    return share>0&&share<0.01?'کمتر از ۰٫۰۱٪':`${faN(share)}٪`;
+  };
+  const itemTitle=row=>`${row.t}، ${faN(row.v)}${unit} (${percentLabel(row.v)})${row.n==null?'':`، ${actLabel(row.n)}`}`;
+  let start=-Math.PI/2;
+  let svg=`<svg class="donut-annotated" viewBox="0 0 ${width} ${height}" direction="ltr" role="img" aria-label="نمودار دایره‌ای"><desc>${data.map(row=>esc(itemTitle(row))).join('؛ ')}</desc>`;
+  const strokeWidth=r-ir, middleRadius=(r+ir)/2;
+  if(!total) svg+=`<circle cx="${cx}" cy="${cy}" r="${middleRadius}" fill="none" stroke="#dae7e4" stroke-width="${strokeWidth}"/>`;
+  for(const [index,row] of data.entries()){
+    if(row.v<=0) continue;
+    const color=palette[index%palette.length], title=esc(itemTitle(row));
+    if(row.v===total){
+      svg+=`<circle cx="${cx}" cy="${cy}" r="${middleRadius}" fill="none" stroke="${color}" stroke-width="${strokeWidth}"><title>${title}</title></circle>`;
+      continue;
     }
-  });
-  const centerTxt=layout?faN(total):(opt.center!==undefined?fmt(opt.center)+(opt.centerSuffix||''):fmt(total));
-  svg+=`<text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="${layout?16:22}" font-weight="700" fill="#0f172a">${esc(centerTxt)}</text>`;
-  if(opt.centerLabel){
-    svg+=`<text x="${cx}" y="${cy+(layout?13:18)}" text-anchor="middle" direction="rtl" font-size="${layout?9:11}" fill="#475569">${esc(opt.centerLabel)}</text>`;
+    const arc=2*Math.PI*row.v/total, finish=start+arc, large=arc>Math.PI?1:0;
+    const point=(angle,radius)=>`${cx+radius*Math.cos(angle)} ${cy+radius*Math.sin(angle)}`;
+    svg+=`<path d="M${point(start,r)} A${r} ${r} 0 ${large} 1 ${point(finish,r)} L${point(finish,ir)} A${ir} ${ir} 0 ${large} 0 ${point(start,ir)} Z" fill="${color}" stroke="#fff" stroke-width="1.3"><title>${title}</title></path>`;
+    start=finish;
   }
-  if(layout){
-    for(const {row,index,angle,direction,y} of layout.labels){
-      const color=palette[index%palette.length], x=cx+direction*121;
-      const share=total?percent(row.v,total):0;
-      const percentage=share>0&&share<0.01?'کمتر از ۰٫۰۱٪':`${faN(share)}٪`;
-      if(angle!==undefined){
-        const ax=cx+(r+2)*Math.cos(angle), ay=cy+(r+2)*Math.sin(angle);
-        svg+=`<path class="source-donut-leader" d="M${ax} ${ay} L${cx+direction*72} ${ay} L${cx+direction*77} ${y}" stroke="${color}" fill="none"/>`;
-      }
-      svg+=`<text x="${x}" y="${y-9}" class="source-donut-label" text-anchor="middle" direction="rtl">`+
-        `<tspan x="${x}" class="source-donut-name">${esc(row.t)}</tspan>`+
-        `<tspan x="${x}" dy="13" class="source-donut-value">${faN(row.v)} ساعت · ${esc(percentage)}</tspan>`+
-        `<tspan x="${x}" dy="12" class="source-donut-count">${actLabel(row.n)}</tspan></text>`;
+  const center=opt.center===undefined?faN(total):faN(opt.center)+(opt.centerSuffix||'');
+  svg+=`<text x="${cx}" y="${cy+(opt.centerLabel?-2:5)}" text-anchor="middle" font-size="${center.length>7?12:15}" font-weight="700" fill="#0f172a">${esc(center)}</text>`;
+  if(opt.centerLabel){
+    svg+=`<text x="${cx}" y="${cy+12}" text-anchor="middle" direction="rtl" font-size="8.5" fill="#475569">${esc(opt.centerLabel)}</text>`;
+  }
+  for(const {row,index,angle,direction,y} of labels){
+    const color=palette[index%palette.length], x=cx+direction*108;
+    const lineEnd=cx+direction*56;
+    if(angle!==undefined){
+      const ax=cx+(r+1)*Math.cos(angle), ay=cy+(r+1)*Math.sin(angle);
+      svg+=`<path class="donut-leader" d="M${ax} ${ay} L${cx+direction*53} ${ay} L${lineEnd} ${y}" stroke="${color}" fill="none"/>`;
     }
+    svg+=`<text x="${x}" y="${y-8}" text-anchor="middle" direction="rtl"><title>${esc(itemTitle(row))}</title>`+
+      `<tspan x="${x}" class="donut-annotation-name">${esc(trunc(row.t,19))}</tspan>`+
+      `<tspan x="${x}" dy="13" class="donut-annotation-value">${faN(row.v)}${esc(unit)} · ${esc(percentLabel(row.v))}</tspan>`+
+      (row.n==null?'':`<tspan x="${x}" dy="12" class="donut-annotation-count">${actLabel(row.n)}</tspan>`)+
+      `</text>`;
   }
   svg+='</svg>';
-
-  let legend='<div class="donut-legend">';
-  data.forEach((d,i)=>{
-    const c=palette[i%palette.length];
-    const pct=total>0?percent(d.v,total):0;
-    const share=pct>0&&pct<0.01?'کمتر از ۰٫۰۱٪':`${faN(pct)}٪`;
-    const unit=opt.unit||'';
-    legend+=`<div class="donut-item">`+
-      `<span class="donut-item-lbl"><span class="donut-dot" style="background:${c}"></span><span class="donut-name">${esc(d.t)}</span></span>`+
-      `<span class="donut-meta"><b>${fmt(d.v)}${esc(unit)}</b> (${esc(share)})`+
-        (d.n!=null?`<small class="donut-count">${actLabel(d.n)}</small>`:'')+
-      `</span>`+
-    `</div>`;
-  });
-  legend+='</div>';
-  return `<div class="donut-wrap${layout?' source-donut-wrap':''}">${svg}${legend}</div>`;
+  const legend=data.map((row,index)=>
+    `<div class="donut-item">`+
+      `<span class="donut-item-lbl"><span class="donut-dot" style="background:${palette[index%palette.length]}"></span><span class="donut-name">${esc(row.t)}</span></span>`+
+      `<span class="donut-meta"><b>${fmt(row.v)}${esc(unit)}</b> (${esc(percentLabel(row.v))})`+
+      (row.n==null?'':`<small class="donut-count">${actLabel(row.n)}</small>`)+
+      `</span></div>`
+  ).join('');
+  return `<div class="donut-wrap${opt.source?' source-donut-wrap':''}">${svg}<div class="donut-legend">${legend}</div></div>`;
 }
 
 /* حبابی Value-Effort */
@@ -590,7 +581,7 @@ function render(){
     srcAgg[k].hours+=Number(l.hours)||0; srcAgg[k].count+=countOf(l); });
   const sourceRows=Object.entries(srcAgg).sort((a,b)=>b[1].hours-a[1].hours)
     .map(([t,a])=>({t,v:a.hours,n:a.count}));
-  renderSelectableChart('chSrc',sourceRows,{pieOptions:{around:true,centerLabel:'نفرساعت'}});
+  renderSelectableChart('chSrc',sourceRows,{pieOptions:{source:true,centerLabel:'نفرساعت'}});
 
   printMetrics={hours,events,prevH,prevCount:prev.count,docs,people,mom,submitted,
     eligible:rk.length,subPct,deptData,groups,portfolio,ve:Object.values(veAgg),act:actRows,stk:stkRows};
