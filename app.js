@@ -117,7 +117,8 @@ async function allPages(path){
 async function loadAll(){
   const role=state.role, initial=!state.ready,scope=state.demoScope;
   let data;
-  if(role==='management'||role==='head') data=await rpc('kpi_dashboard');
+  if(role==='management') data=await rpc('kpi_management_overview');
+  else if(role==='head') data=await rpc('kpi_dashboard');
   else if(role==='expert') data=await rpc('kpi_expert_form');
   else if(role==='admin') {
     const [logs,personnel,activities,stakeholders,projects,submissions,activityScoreMap]=await Promise.all([
@@ -131,16 +132,16 @@ async function loadAll(){
     ]);
     data={logs,personnel,activities,stakeholders,projects,submissions,activityScoreMap};
   } else throw new Error('برای این حساب هنوز نقشی تعیین نشده است. با ادمین تماس بگیرید.');
-  if(role!=='expert') data.projectLoad=await rpc('kpi_project_load',{p_demo:false}).catch(()=>null);
+  if(role!=='expert'&&role!=='management') data.projectLoad=await rpc('kpi_project_load',{p_demo:false}).catch(()=>null);
   if(!session || state.role!==role || state.demoScope!==scope) return;
   const {projectLoad=null,logs,personnel,activities=[],stakeholders=[],projects=[],submissions,scope:deptScope=null,activityScoreMap=[]}=data;
   if(role==='admin'&&Array.isArray(activityScoreMap)){
     const scoreMap=new Map(activityScoreMap.map(x=>[`${x.department_id}:${x.activity_id}`,Number(x.effort_score)]));
     logs.forEach(l=>{const key=`${l.employee?.department?.id}:${l.activity_id}`;if(l.activity&&scoreMap.has(key))l.activity.effort_score=scoreMap.get(key);});
   }
-  Object.assign(state,{logs,personnel,activities,activityScoreMap,stakeholders,projects,submissions,projectLoad,deptScope});
-  const months=[...new Set(logs.map(l=>l.period_year*100+l.period_month))].sort((a,b)=>a-b);
-  const now=new Intl.DateTimeFormat('en-US-u-ca-persian',{year:'numeric',month:'numeric'}).formatToParts(new Date());
+  Object.assign(state,{logs,personnel,activities,activityScoreMap,stakeholders,projects,submissions,projectLoad,deptScope,loadedAt:new Date()});
+  const months=[...new Set((role==='management'?[...logs,...submissions]:logs).map(periodKey))].sort((a,b)=>a-b);
+  const now=new Intl.DateTimeFormat('en-US-u-ca-persian',{year:'numeric',month:'numeric',timeZone:'Asia/Tehran'}).formatToParts(new Date());
   const yr=Number(now.find(p=>p.type==='year').value), mo=Number(now.find(p=>p.type==='month').value);
   state.month=months.includes(state.month)?state.month:(months.at(-1)||yr*100+mo);
   if(role!=='expert') fillDashboardFilters();
@@ -172,7 +173,7 @@ const dashboardData=()=>state.demo ? state.demoData : state;
 const demoPeriodLabel=m=>m===140506?'واقعی':'آزمایشی';
 function fillDashboardFilters(){
   const {logs,personnel}=dashboardData();
-  const months=state.demo?DEMO_MONTHS:[...new Set(logs.map(l=>l.period_year*100+l.period_month))].sort((a,b)=>a-b);
+  const months=state.demo?DEMO_MONTHS:state.role==='management'?managementPeriods():[...new Set(logs.map(periodKey))].sort((a,b)=>a-b);
   const yearMonth=months.includes(state.month)?state.month:(months.at(-1)||state.month);
   state.month=yearMonth;
   fillSelect('#fMonth',(months.length?months:[state.month]).map(m=>({v:m,t:`${FA_MONTHS[m%100-1]} ${Math.floor(m/100)}${state.demo?' — '+demoPeriodLabel(m):''}`})),state.month);
@@ -231,6 +232,23 @@ async function toggleDemo(){
   }finally{ btn.disabled=false; }
 }
 
+function officialManagement(){ return state.role==='management'&&!state.demo; }
+function periodKey(row){ return row.period_year*100+row.period_month; }
+function periodOffset(period, offset){
+  const index=Math.floor(period/100)*12+period%100-1+offset;
+  return Math.floor(index/12)*100+index%12+1;
+}
+function monthRange(end, count){
+  return Array.from({length:count},(_,i)=>periodOffset(end,i-count+1));
+}
+function managementPeriods(){
+  const current=new Intl.DateTimeFormat('en-US-u-ca-persian',
+    {year:'numeric',month:'numeric',timeZone:'Asia/Tehran'}).formatToParts(new Date());
+  const today=Number(current.find(p=>p.type==='year').value)*100+Number(current.find(p=>p.type==='month').value);
+  const recorded=new Set([...state.logs,...state.submissions].map(periodKey));
+  const latest=[...recorded].reduce((max,key)=>Math.max(max,key),today);
+  return [...new Set([...recorded,...monthRange(latest,12)])].sort((a,b)=>a-b);
+}
 function filtered(useMonth=true){
   const y=Math.floor(state.month/100), m=state.month%100;
   return dashboardData().logs.filter(l=>
@@ -285,6 +303,7 @@ function vbar(data, opt={}){
   if(!data.length) return emptyBox('داده‌ای برای نمایش نیست');
   const hasCount=data.some(d=>d.n!=null);
   const W=opt.w||560, H=hasCount?266:248, padL=60, padR=14, padT=30, padB=hasCount?64:46;
+  const unit=opt.unit||'نفرساعت';
   const max=Math.max(...data.map(d=>d.v),1);
   const bw=Math.min(58,(W-padL-padR)/data.length-14);
   let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="direction:ltr">`;
@@ -293,14 +312,14 @@ function vbar(data, opt={}){
     s+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e2e8f0" stroke-dasharray="${g===4?'':'3 3'}"/>`;
     s+=`<text x="${padL-8}" y="${y+4}" text-anchor="end" font-size="10.5" fill="#475569">${fmt(val)}</text>`;
   }
-  s+=`<text x="${padL}" y="12" text-anchor="start" font-size="10.5" fill="#64748b">نفرساعت</text>`;
+  s+=`<text x="${padL}" y="12" text-anchor="start" font-size="10.5" fill="#64748b">${esc(unit)}</text>`;
   if(hasCount) s+=`<text x="${W-padR}" y="12" text-anchor="end" direction="rtl" font-size="10.5" fill="#64748b">تعداد فعالیت زیر هر ستون</text>`;
   const step=(W-padL-padR)/data.length;
   data.forEach((d,i)=>{
     const h=(H-padT-padB)*d.v/max, x=padL+step*i+(step-bw)/2, y=H-padB-h;
-    s+=`<g><title>${esc(d.t)}${d.t2?' '+esc(d.t2):''}: ${fmt(d.v)} نفرساعت${d.n!=null?' · '+fmt(d.n)+' فعالیت':''}</title>`;
-    s+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(h,2)}" rx="6" fill="${d.c||'#1d5bd8'}"/>`;
-    s+=`<text x="${x+bw/2}" y="${y-7}" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">${fmt(d.v)}</text>`;
+    s+=`<g><title>${esc(d.t)}${d.t2?' '+esc(d.t2):''}: ${d.v==null?'داده در دسترس نیست':fmt(d.v)+' '+unit}${d.n!=null?' · '+fmt(d.n)+' فعالیت':''}</title>`;
+    if(d.v!=null) s+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(h,2)}" rx="6" fill="${d.c||'#1d5bd8'}"/>`;
+    s+=`<text x="${x+bw/2}" y="${y-7}" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">${d.v==null?'—':fmt(d.v)}</text>`;
     s+=`<text x="${x+bw/2}" y="${H-padB+17}" text-anchor="middle" direction="rtl" font-size="11.5" font-weight="700" fill="#334155">${esc(d.t)}</text>`;
     if(d.t2) s+=`<text x="${x+bw/2}" y="${H-padB+32}" text-anchor="middle" direction="rtl" font-size="10" fill="#64748b">${esc(d.t2)}</text>`;
     if(d.n!=null) s+=`<text x="${x+bw/2}" y="${H-8}" text-anchor="middle" direction="rtl" font-size="10.5" font-weight="700" fill="#1d5bd8">${fmt(d.n)} فعالیت</text>`;
@@ -432,7 +451,7 @@ function render(){
   allMonth.forEach(l=>{const k=l.period_year*100+l.period_month; if(!byM[k]) byM[k]={hours:0,count:0}; byM[k].hours+=Number(l.hours)||0; byM[k].count+=countOf(l);});
   const trend=(state.demo?DEMO_MONTHS:Object.keys(byM).sort().map(Number)).map(k=>({t:FA_MONTHS[k%100-1], t2:state.demo?demoPeriodLabel(k):Math.floor(k/100),
     v:(byM[k]||{}).hours||0, n:(byM[k]||{}).count||0, c:state.demo&&k!==140506?(k===state.month?'#ac5d06':'#cf8b35'):(k===state.month||state.demo?'#1d5bd8':'#9db8ec')}));
-  $('#chTrend').innerHTML=vbar(trend);
+  if(!officialManagement()) $('#chTrend').innerHTML=vbar(trend);
 
   // ---- گزارش‌دهی ----
   const submitted=subm.length, missing=Math.max(rk.length-subm.length,0);
@@ -499,6 +518,7 @@ function render(){
   printMetrics={hours,events,prevH,prevCount:prev.count,docs,people,mom,submitted,
     eligible:rk.length,subPct,deptData,groups,portfolio,ve:Object.values(veAgg),act:actRows,stk:stkRows};
 
+  renderManagement();
   if(['admin','head'].includes(state.role)&&!state.demo) renderTable(logs);
   if(state.role==='admin') renderMyRows();
 }
@@ -539,31 +559,245 @@ function renderPriorities(items,hours){
 }
 
 function portfolioForScope(){
-  const items=dashboardData().projectLoad;
+  const items=officialManagement()?filtered(true).map(log=>({
+    period_year:log.period_year,period_month:log.period_month,employee_id:log.employee.id,
+    department:log.employee.department.name_fa,project_id:log.project_id,project:log.project?.name_fa,
+    project_code:log.project?.contract_no,stakeholder_id:log.stakeholder_id,
+    stakeholder:log.stakeholder?.name_fa,hours:log.hours,event_count:log.event_count,doc_count:log.doc_count
+  })):dashboardData().projectLoad;
   if(!Array.isArray(items)) return null;
   const rows=items.filter(x=>x.period_year*100+x.period_month===state.month&&(!state.dept||x.department===state.dept)&&(!state.person||String(x.employee_id)===state.person));
   const project=new Map(),stakeholder=new Map();
-  const add=(map,id,name,dept,h,code)=>{
-    if(!map.has(id)) map.set(id,{id,name,hours:0,events:0,units:new Map(),code});
-    const a=map.get(id);a.hours+=h;a.events+=1;a.units.set(dept,(a.units.get(dept)||0)+h);
+  const add=(map,id,name,row,code)=>{
+    if(!map.has(id)) map.set(id,{id,name,hours:0,events:0,docs:0,units:new Map(),code});
+    const group=map.get(id), dept=row.department;
+    if(!group.units.has(dept)) group.units.set(dept,{hours:0,events:0,docs:0});
+    for(const total of [group,group.units.get(dept)]){
+      total.hours+=Number(row.hours)||0;
+      total.events+=countOf(row);
+      total.docs+=Number(row.doc_count)||0;
+    }
   };
   let unassigned=0, unassignedStake=0;
   for(const r of rows){
     const h=Number(r.hours); if(r.project_id==null) unassigned+=h;
     if(r.stakeholder_id==null) unassignedStake+=h;
-    add(project,r.project_id,r.project||'بدون پروژه',r.department,h,r.project_code);
-    add(stakeholder,r.stakeholder_id,r.stakeholder||'بدون ذینفع',r.department,h);
+    add(project,r.project_id,r.project||'بدون پروژه',r,r.project_code);
+    add(stakeholder,r.stakeholder_id,r.stakeholder||'بدون ذینفع',r);
   }
-  return {project:descending(project),stakeholder:descending(stakeholder),unassigned,unassignedStake,hours:sumHours(rows),events:rows.length};
+  return {project:descending(project),stakeholder:descending(stakeholder),unassigned,unassignedStake,hours:sumHours(rows),events:tally(rows).count};
 }
 function renderPortfolio(p=portfolioForScope()){
+  renderManagementProject(p);
   if(!p){ $('#portfolioSummary').textContent='';$('#portfolioTable').innerHTML=emptyBox('تحلیل بار کاری فعلاً در دسترس نیست.');return; }
   const project=$('#portfolioBy').value==='project',unassigned=project?p.unassigned:p.unassignedStake;
   $('#portfolioSummary').innerHTML=`<span>کل بار: <b>${faN(p.hours)}</b> ساعت · <b>${actLabel(p.events)}</b></span><span>${project?'بدون پروژه':'بدون ذینفع'}: <b>${faN(unassigned)}</b> ساعت (${faN(percent(unassigned,p.hours))}٪)</span><span>نمایش حداکثر ۱۰ مورد بر اساس نفرساعت</span>`;
   const rows=(project?p.project:p.stakeholder).slice(0,10);
   if(!rows.length){$('#portfolioTable').innerHTML=emptyBox('در این محدوده داده‌ای ثبت نشده است.');return;}
-  const seg=r=>[...r.units.entries()].sort((a,b)=>b[1]-a[1]).slice(0,3).map(([d,h])=>`${esc(d)}: ${faN(h)}`).join('، ');
+  const seg=r=>[...r.units.entries()].sort((a,b)=>b[1].hours-a[1].hours).slice(0,3).map(([d,total])=>`${esc(d)}: ${faN(total.hours)}`).join('، ');
   $('#portfolioTable').innerHTML=`<table><thead><tr><th>${project?'پروژه':'ذینفع'}</th><th>نفرساعت</th><th>تعداد فعالیت</th><th>سهم از کل</th><th>واحدهای دارای بیشترین بار (تا ۳ واحد)</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}${r.code?` <span class="hint" dir="auto">(${esc(r.code)})</span>`:''}</td><td>${faN(r.hours)}</td><td>${faN(r.events)}</td><td>${faN(percent(r.hours,p.hours))}٪</td><td>${seg(r)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+let managementReport=null;
+function managementSummary(data, month, department, person){
+  const staff=data.personnel.filter(p=>(!department||p.department.name_fa===department)&&(!person||String(p.id)===person));
+  const previousMonth=periodOffset(month,-1);
+  const members=new Map(staff.map(p=>[p.id,p]));
+  const teams=new Map();
+  const months=new Map();
+  const bucket=()=>({hours:0,events:0,docs:0,submitted:new Set()});
+  const getMonth=key=>{
+    if(!months.has(key)) months.set(key,bucket());
+    return months.get(key);
+  };
+  const getTeam=p=>{
+    const name=p.department.name_fa;
+    if(!teams.has(name)) teams.set(name,{name,active:0,current:bucket(),previous:bucket()});
+    return teams.get(name);
+  };
+  const addLog=(total,log)=>{
+    total.hours+=Number(log.hours)||0;
+    total.events+=countOf(log);
+    total.docs+=Number(log.doc_count)||0;
+  };
+  let latestSubmission=0;
+  for(const p of staff) if(p.active) getTeam(p).active++;
+  for(const submission of data.submissions){
+    const p=members.get(submission.employee_id);
+    if(!p||submission.status!=='submitted') continue;
+    const key=periodKey(submission);
+    getMonth(key).submitted.add(p.id);
+    if(key===month){
+      getTeam(p).current.submitted.add(p.id);
+      const submittedAt=Date.parse(submission.submitted_at);
+      if(Number.isFinite(submittedAt)) latestSubmission=Math.max(latestSubmission,submittedAt);
+    }else if(key===previousMonth) getTeam(p).previous.submitted.add(p.id);
+  }
+  for(const log of data.logs){
+    const p=members.get(log.employee?.id);
+    if(!p) continue;
+    const key=periodKey(log);
+    const total=getMonth(key);
+    if(!total.submitted.has(p.id)) continue;
+    addLog(total,log);
+    if(key===month) addLog(getTeam(p).current,log);
+    else if(key===previousMonth) addLog(getTeam(p).previous,log);
+  }
+  const measure=(total, roster)=>{
+    const submitted=total.submitted.size;
+    const eligible=roster+Array.from(total.submitted).filter(id=>!members.get(id)?.active).length;
+    return {
+      hours:total.hours,events:total.events,docs:total.docs,submitted,eligible,
+      coverage:eligible?Math.round(100*submitted/eligible):null,
+      status:!submitted?'بدون گزارش نهایی':submitted<eligible?'پوشش ناقص':'پوشش کامل'
+    };
+  };
+  const roster=staff.filter(p=>p.active).length;
+  const current=measure(getMonth(month),roster);
+  const previous=measure(getMonth(previousMonth),roster);
+  const units=Array.from(teams.values(),team=>({
+    name:team.name,current:measure(team.current,team.active),previous:measure(team.previous,team.active),
+  })).sort((a,b)=>b.current.hours-a.current.hours||a.name.localeCompare(b.name,'fa'));
+  const trend=monthRange(month,12).map(key=>({key,...measure(getMonth(key),roster)}));
+  return {current,previous,units,trend,latestSubmission};
+}
+
+function managementChange(current, previous, key){
+  if(!current.submitted||!previous.submitted||!previous[key]) return '—';
+  const delta=100*(current[key]-previous[key])/previous[key];
+  return `${delta>0?'+':''}${faN(delta)}٪`;
+}
+
+function managementActions(report, portfolio, lowValue){
+  const followups=report.units.filter(u=>u.current.eligible>u.current.submitted)
+    .sort((a,b)=>(b.current.eligible-b.current.submitted)-(a.current.eligible-a.current.submitted))
+    .map(u=>({topic:'تکمیل گزارش‌های ماه',scope:u.name,dept:u.name,
+      reason:`${faN(u.current.eligible-u.current.submitted)} گزارش نهایی دریافت نشده`,
+      owner:'رئیس دپارتمان',status:u.current.status}));
+  if(portfolio?.unassigned>0) followups.push({
+    topic:'تکمیل اطلاعات پروژه',scope:'پروژه‌های ثبت‌نشده',
+    reason:`${faN(portfolio.unassigned)} نفرساعت بدون پروژه`,owner:'مسئول ثبت گزارش',status:'نیازمند بررسی'
+  });
+  if(lowValue?.hours>0) followups.push({
+    topic:'بازبینی فرایند فعالیت‌ها',scope:lowValue.leading||'ارزش پایین و تلاش بالا',
+    reason:`${faN(lowValue.hours)} نفرساعت · ${faN(percent(lowValue.hours,report.current.hours))}٪ از کل`,
+    owner:'مدیریت و رؤسای دپارتمان',status:'پیشنهاد بررسی'
+  });
+  return followups;
+}
+
+function managementKpis(report){
+  const {current,previous}=report;
+  return [
+    {name:'نفرساعت نهایی',value:current.submitted?faN(current.hours):'—',detail:managementChange(current,previous,'hours')},
+    {name:'تعداد فعالیت',value:current.submitted?faN(current.events):'—',detail:managementChange(current,previous,'events')},
+    {name:'مدرک / موضوع بررسی‌شده',value:current.submitted?faN(current.docs):'—',detail:managementChange(current,previous,'docs')},
+    {name:'پوشش گزارش‌دهی',value:current.coverage==null?'—':`${faN(current.coverage)}٪`,
+      detail:current.coverage==null||previous.coverage==null?'—':`${faN(current.coverage-previous.coverage)} واحد درصد`}
+  ];
+}
+
+function managementTable(headers, rows, empty){
+  if(!rows.length) return emptyBox(empty);
+  return `<table tabindex="-1"><thead><tr>${headers.map(label=>`<th scope="col">${esc(label)}</th>`).join('')}</tr></thead><tbody>${rows.map(cells=>`<tr>${cells.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+
+function managementUnitsTable(report, limit=report.units.length){
+  const rows=report.units.slice(0,limit).map(({name,current,previous})=>[
+    esc(name),faN(current.eligible),faN(current.submitted),
+    current.submitted?faN(current.hours):'—',current.submitted?faN(current.events):'—',
+    esc(managementChange(current,previous,'hours')),esc(current.status)
+  ]);
+  return managementTable(['واحد','مشمول*','نهایی','نفرساعت','فعالیت','تغییر نفرساعت','پوشش'],rows,'واحدی در این محدوده وجود ندارد.');
+}
+
+function managementActionsTable(actions, interactive){
+  const rows=actions.map(action=>[
+    esc(action.topic),
+    interactive&&action.dept?`<button type="button" class="ghost management-action" data-management-dept="${esc(action.dept)}">${esc(action.scope)}</button>`:esc(action.scope),
+    esc(action.reason),esc(action.owner),esc(action.status)
+  ]);
+  return managementTable(['موضوع','واحد / دامنه','علت','نقش پیگیر','وضعیت'],rows,'موردی برای پیگیری در این محدوده شناسایی نشد.');
+}
+
+function managementPeriodText(report){
+  const period=$('#fMonth').selectedOptions[0]?.textContent||'—';
+  const date=new Intl.DateTimeFormat('fa-IR-u-ca-persian',
+    {dateStyle:'short',timeStyle:'short',timeZone:'Asia/Tehran'});
+  const last=report.latestSubmission?`آخرین ارسال نهایی ${date.format(report.latestSubmission)}`:
+    state.loadedAt?`زمان بازیابی ${date.format(state.loadedAt)}`:'';
+  return [period,'گزارش‌های نهایی',last].filter(Boolean).join(' · ');
+}
+
+function renderManagement(){
+  const show=officialManagement();
+  $('#tab-dash').dataset.management=String(show);
+  $('#managementOverview').hidden=!show;
+  $('#kpis').hidden=show;
+  const details=$('#valueEffortDetails');
+  if(details.dataset.management!==String(show)){
+    details.open=!show;
+    details.dataset.management=String(show);
+  }
+  if(!show) {managementReport=null;return;}
+  const report=managementSummary(state,state.month,state.dept,state.person);
+  const actions=managementActions(report,printMetrics.portfolio,printMetrics.groups[2]);
+  managementReport={report,actions};
+  $('#managementPeriod').textContent=managementPeriodText(report);
+  const {submitted,eligible}=report.current;
+  $('#managementCoverage').textContent=`${faN(submitted)} گزارش نهایی از ${faN(eligible)} نفر مشمول*`;
+  $('#managementKpis').innerHTML=managementKpis(report).map(kpi=>
+    `<div class="kpi"><div class="kpi-v">${esc(kpi.value)}</div><div class="kpi-l">${esc(kpi.name)}</div><div class="kpi-d">ماه قبل · ${esc(kpi.detail)}</div></div>`
+  ).join('');
+  $('#managementActions').innerHTML=managementActionsTable(actions,true);
+  $('#managementUnits').innerHTML=managementUnitsTable(report)+
+    '<p class="hint">* مخرج از فهرست فعال فعلی و گزارش‌دهندگان نهایی همان دوره محاسبه می‌شود. آمار تاریخی با تغییر فهرست پرسنل قابل تغییر است.</p>';
+  const series=report.trend.map(m=>({
+    t:FA_MONTHS[m.key%100-1],t2:faN(Math.floor(m.key/100)),
+    c:m.status==='پوشش کامل'?'#1d5bd8':'#ac5d06',month:m
+  }));
+  const chart=(key,unit)=>vbar(series.map(d=>({...d,v:d.month.submitted?d.month[key]:null})),{w:670,unit});
+  $('#managementTrend').innerHTML=chart('hours','نفرساعت')+chart('events','فعالیت')+
+    `<div class="management-months">${series.map(d=>`<span>${esc(d.t)}<small>${esc(d.month.status)}</small></span>`).join('')}</div>`;
+}
+
+function renderManagementProject(portfolio){
+  const show=officialManagement();
+  $('#portfolioTitle').textContent=show?'بار پروژه‌ها و ذی‌نفعان':'تمرکز بار کاری';
+  const select=$('#managementProject'), panel=$('#managementProjectSection');
+  panel.hidden=!show;
+  if(!show) return;
+  const projectRows=portfolio?.project.filter(project=>project.id!=null)||[];
+  const selected=projectRows.find(project=>String(project.id)===select.value)||projectRows[0];
+  fillSelect('#managementProject',projectRows.map(project=>({
+    v:project.id,t:project.code?`${project.name} (${project.code})`:project.name
+  })),selected?.id||'');
+  const rows=selected?Array.from(selected.units).sort((a,b)=>b[1].hours-a[1].hours)
+    .map(([name,unit])=>[esc(name),faN(unit.hours),faN(unit.events),faN(unit.docs)]):[];
+  if(selected) rows.push(['جمع پروژه',faN(selected.hours),faN(selected.events),faN(selected.docs)]);
+  select.disabled=!selected;
+  $('#managementProjectTable').innerHTML=managementTable(['واحد','نفرساعت','فعالیت','مدرک / موضوع'],
+    rows,'در این محدوده، فعالیتی با پروژهٔ مشخص ثبت نشده است.');
+}
+
+function printManagement(target){
+  if(!managementReport) return;
+  const {report,actions}=managementReport;
+  const subject=state.person?state.personnel.find(p=>String(p.id)===state.person)?.name_en:null;
+  const unitsShown=8;
+  const date=new Intl.DateTimeFormat('fa-IR-u-ca-persian',{timeZone:'Asia/Tehran'}).format(new Date());
+  target.innerHTML=`<div class="management-print"><header><h1>گزارش ماهانهٔ مدیریت معاونت مهندسی</h1>
+    <p class="print-meta">${esc(managementPeriodText(report))} · تهیه ${esc(date)}</p>
+    <p class="print-meta">واحد ${esc(state.dept||'همه')} · کارشناس ${esc(subject||'همه')} · پوشش ${faN(report.current.submitted)} از ${faN(report.current.eligible)} نفر*</p></header>
+    <section class="print-kpis">${managementKpis(report).map(kpi=>`<div><strong>${esc(kpi.value)}</strong>${esc(kpi.name)}<br>ماه قبل · ${esc(kpi.detail)}</div>`).join('')}</section>
+    <section><h2>موارد نیازمند پیگیری</h2>${managementActionsTable(actions.slice(0,3),false)}
+    ${actions.length>3?`<small>${faN(actions.length-3)} مورد دیگر در داشبورد قابل مشاهده است.</small>`:''}</section>
+    <section><h2>مقایسهٔ واحدها</h2>${managementUnitsTable(report,unitsShown)}
+    ${report.units.length>unitsShown?`<small>نمایش ${faN(unitsShown)} واحد از ${faN(report.units.length)} واحد، به ترتیب نفرساعت.</small>`:''}</section>
+    <small>* پوشش با فهرست فعال فعلی و ارسال‌کنندگان نهایی دوره محاسبه شده است.</small>
+    </div>`;
+  target.dataset.ready='true';
+  window.print();
 }
 
 let printMetrics=null;
@@ -571,6 +805,10 @@ function printReport(){
   if(!['admin','management','head'].includes(state.role)||state.tab!=='dash'||!printMetrics) return;
   const {hours,events,prevH,prevCount,docs,people,mom,submitted,eligible,subPct,deptData,groups,portfolio,ve,act,stk}=printMetrics;
   const p=$('#printReport');
+  if(officialManagement()){
+    printManagement(p);
+    return;
+  }
   const noData=!filtered(true).length;
   const person=state.person?dashboardData().personnel.find(x=>String(x.id)===state.person)?.name_en:null;
   const source=state.demo?(state.month===140506?'شهریور واقعی در نمای آزمایشی؛ مقایسهٔ رشد با مرداد ساختگی است.':'دادهٔ ماه انتخابی ساختگی است؛ برای ارزیابی افراد استفاده نشود.'):'داده‌های واقعی';
@@ -1105,7 +1343,13 @@ function resetUi(){
   catalogSeq++;catalogRows=[];catalogBusy=false;$('#catKind').disabled=false;$('#catTable').textContent='';catMsg('');
   $('#catForm').reset();$('#catKind').value='personnel';$('#catStatus').value='all';$('#catSearch').value='';setCatalogFields();
   if($('#qualityDialog').open) $('#qualityDialog').close();
-  printMetrics=null;$('#printReport').removeAttribute('data-ready');$('#printReport').textContent='';
+  printMetrics=null;managementReport=null;
+  $('#managementOverview').hidden=true;
+  $('#managementProjectSection').hidden=true;
+  for(const id of ['managementPeriod','managementCoverage','managementKpis','managementActions','managementUnits','managementTrend','managementProject','managementProjectTable']){
+    document.getElementById(id).textContent='';
+  }
+  $('#printReport').removeAttribute('data-ready');$('#printReport').textContent='';
   for(const i of ['#priorityGrid','#portfolioSummary','#portfolioTable','#kpiHoursC']) $(i).textContent='';
   updateDemoUi();
   $('#demoMsg').textContent='';
@@ -1134,10 +1378,35 @@ document.addEventListener('DOMContentLoaded', ()=>{
   $('#catForm').onsubmit=submitCatalog;
   $('#qualityCancel').onclick=()=>$('#qualityDialog').close();
   $('#btnPrint').onclick=printReport;
+  $('#managementProject').onchange=()=>renderManagementProject(portfolioForScope());
+  $('#managementActions').onclick=event=>{
+    const button=event.target.closest('[data-management-dept]');
+    if(!button||!officialManagement()) return;
+    state.dept=button.dataset.managementDept;
+    state.person='';
+    syncFilters();
+    render();
+    $('#managementUnits').scrollIntoView({block:'nearest'});
+    $('#managementUnits').querySelector('table')?.focus({preventScroll:true});
+  };
   window.addEventListener('afterprint',()=>{ $('#printReport').removeAttribute('data-ready'); $('#printReport').textContent=''; });
   $('#fMonth').onchange=e=>{ state.month=+e.target.value; render(); };
-  $('#fDept').onchange=e=>{ state.dept=e.target.value; render(); };
-  $('#fPerson').onchange=e=>{ state.person=e.target.value; render(); };
+  $('#fDept').onchange=e=>{
+    state.dept=e.target.value;
+    if(officialManagement()&&state.dept&&state.person&&!state.personnel.some(p=>String(p.id)===state.person&&p.department.name_fa===state.dept)){
+      state.person='';
+      syncFilters();
+    }
+    render();
+  };
+  $('#fPerson').onchange=e=>{
+    state.person=e.target.value;
+    if(officialManagement()&&state.dept&&state.person){
+      const person=state.personnel.find(p=>String(p.id)===state.person);
+      if(person?.department.name_fa!==state.dept){state.dept='';syncFilters();}
+    }
+    render();
+  };
   $('#fReset').onclick=()=>{ state.dept=''; state.person=''; syncFilters(); render(); };
   $('#eSource').onchange=refreshActivities;
   $('#eActivity').onchange=updateHint;

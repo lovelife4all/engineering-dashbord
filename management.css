@@ -1,0 +1,26 @@
+/* Management overview */
+.management-overview{display:grid;gap:16px;margin-bottom:16px}
+.management-header h2{margin:0}
+.management-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin-top:12px}
+.management-kpis .kpi{min-width:0}
+.management-trend{overflow-x:auto}
+.management-trend>svg{display:block;min-width:670px;height:auto}
+.management-months{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:5px;min-width:670px;padding:0 14px 0 60px;direction:ltr}
+.management-months span{text-align:center;direction:rtl;font-size:.72rem}
+.management-months small{display:block;color:var(--muted)}
+#managementProjectSection{margin-top:18px}
+#managementProject{max-width:100%;margin-bottom:8px}
+#valueEffortDetails>summary{cursor:pointer;font-weight:700}
+#valueEffortDetails[open]>summary{margin-bottom:12px}
+#valueEffortDetails[data-management="false"]{display:contents}
+#valueEffortDetails[data-management="false"]>summary{display:none}
+#valueEffortDetails[data-management="true"]>.card{background:none;border:0;box-shadow:none;padding:0}
+#tab-dash[data-management="true"] .management-legacy{display:none}
+.management-action{white-space:normal}
+@media print {
+  .print-report .management-print .print-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .print-report .management-print th:first-child{width:auto}
+  .print-report .management-print h2{margin-top:8px}
+  .print-report .management-print table{font-size:8pt}
+  .print-report .management-print th,.print-report .management-print td{padding:3px 4px}
+}

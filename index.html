@@ -13,7 +13,8 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css?v=improve7">
+<link rel="stylesheet" href="style.css?v=management8">
+<link rel="stylesheet" href="management.css?v=management8">
 </head>
 <body data-bg="blueprint">
 
@@ -110,6 +111,21 @@
 <!-- ============ تب داشبورد ============ -->
 <main id="tab-dash" class="tabpane active">
 
+  <section class="management-overview" id="managementOverview" hidden>
+    <div class="card management-header">
+      <div class="section-head"><div><h2>خلاصهٔ ماه مدیریت</h2><p class="hint" id="managementPeriod"></p></div>
+        <span class="catalog-pill" id="managementCoverage"></span>
+      </div>
+      <div class="management-kpis" id="managementKpis"></div>
+    </div>
+    <div class="card"><h3>موارد نیازمند پیگیری</h3><div class="tblwrap" id="managementActions"></div></div>
+    <div class="card"><h3>مقایسهٔ واحدها</h3><div class="tblwrap" id="managementUnits"></div></div>
+    <div class="card"><h3>روند ۱۲ ماهه تا دورهٔ انتخابی</h3>
+      <div class="management-trend" id="managementTrend"></div>
+      <p class="hint">وضعیت هر ماه بر اساس گزارش‌های نهایی و فهرست فعلی پرسنل است.</p>
+    </div>
+  </section>
+
   <section class="kpis" id="kpis">
     <div class="kpi"><div class="kpi-v" id="kpiHours">—</div><div class="kpi-l">نفرساعت ماه</div><div class="kpi-count" id="kpiHoursC"></div><div class="kpi-d" id="kpiHoursD"></div></div>
     <div class="kpi"><div class="kpi-v" id="kpiMom">—</div><div class="kpi-l">رشد نسبت به ماه قبل</div><div class="kpi-d" id="kpiMomD"></div></div>
@@ -119,31 +135,34 @@
   </section>
 
   <section class="grid">
-    <div class="card c2">
+    <div class="card management-legacy c2">
       <h3>روند ماهانه نفرساعت و تعداد فعالیت <span class="hint" id="trendDemoLabel" hidden>· مقایسهٔ داده‌های آزمایشی با شهریور واقعی</span></h3>
       <div id="chTrend" class="chart"></div>
     </div>
-    <div class="card">
+    <div class="card management-legacy">
       <h3>وضعیت گزارش‌دهی ماه</h3>
       <div id="chSub" class="chart"></div>
     </div>
-    <div class="card c2">
+    <div class="card management-legacy c2">
       <h3>بار دپارتمان‌ها در مقابل ظرفیت (۱۸۰ ساعت/نفر) <span class="hint">· در کنار هر نوار، تعداد فعالیت</span></h3>
       <div id="chDept" class="chart"></div>
     </div>
-    <div class="card">
-      <h3>Value در مقابل Effort <span class="hint">(حجم = نفرساعت · تعداد در راهنما)</span></h3>
-      <div id="chVE" class="chart"></div>
-    </div>
-    <div class="card c3">
-      <h3>اولویت‌بندی ارزش و تلاش</h3>
+    <details class="card c3" id="valueEffortDetails" open>
+      <summary>تحلیل ارزش و تلاش</summary>
+      <div class="card"><h3>Value در مقابل Effort <span class="hint">(حجم = نفرساعت · تعداد در راهنما)</span></h3>
+      <div id="chVE" class="chart"></div></div>
+      <div class="card c3"><h3>اولویت‌بندی ارزش و تلاش</h3>
       <p class="hint">Value: امتیاز ۵ تا ۷ «بالا» و ۱ تا ۴ «پایین»؛ Effort: امتیاز ۶ تا ۱۰ «بالا» و ۱ تا ۵ «پایین» است. سهم هر بخش از کل نفرساعت همین فیلتر محاسبه می‌شود؛ پیشنهادها برای بازبینی فعالیت‌اند، نه رتبه‌بندی افراد.</p>
-      <div id="priorityGrid" class="priority-grid"></div>
-    </div>
+      <div id="priorityGrid" class="priority-grid"></div></div>
+    </details>
     <div class="card c3">
-      <div class="section-head"><div><h3>تمرکز بار کاری</h3><p class="hint">سهم از کل نفرساعت محدوده و تعداد فعالیت هر مورد، با تفکیک واحدهای درگیر</p></div>
+      <div class="section-head"><div><h3 id="portfolioTitle">تمرکز بار کاری</h3><p class="hint">سهم از کل نفرساعت محدوده و تعداد فعالیت هر مورد، با تفکیک واحدهای درگیر</p></div>
       <label>گروه‌بندی <select id="portfolioBy"><option value="project">پروژه</option><option value="stakeholder">ذینفع</option></select></label></div>
       <div id="portfolioSummary" class="portfolio-summary"></div><div id="portfolioTable" class="tblwrap"></div>
+      <section id="managementProjectSection" hidden>
+        <label>جزئیات پروژه <select id="managementProject"></select></label>
+        <div id="managementProjectTable" class="tblwrap"></div>
+      </section>
     </div>
     <div class="card c2">
       <h3>نفرساعت و تعداد فعالیت به تفکیک فعالیت</h3>
@@ -359,7 +378,7 @@ admin2@company.ir | admin | رمزاختیاری"></textarea>
 
 <article id="printReport" class="print-report" dir="rtl" aria-label="گزارش قابل چاپ"></article>
 
-<script src="config.js?v=improve7"></script>
-<script src="app.js?v=improve7"></script>
+<script src="config.js?v=management8"></script>
+<script src="app.js?v=management8"></script>
 </body>
 </html>
