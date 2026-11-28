@@ -238,3 +238,21 @@
   .card .donut-item { flex-wrap: wrap; }
 }
 .management-trend-panel .chart:not(:last-of-type) { margin-block-end: 12px; }
+
+/* The Bale entry serves the existing report form in an embedded browser. */
+body[data-entry="bale"] .auth-screen {
+  align-items: center;
+  padding-inline: 14px;
+}
+.bale-pilot-info {
+  margin-block: 6px 3px;
+  color: #11534f;
+  font-size: 12px;
+  font-weight: 700;
+}
+body[data-entry="bale"] .topbar {
+  position: static;
+}
+body[data-entry="bale"] .topbar nav {
+  display: none;
+}

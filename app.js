@@ -10,6 +10,7 @@ const state = { logs:[], personnel:[], activities:[], activityScoreMap:[], activ
                 month:null, dept:'', person:'' };
 
 const $ = s => document.querySelector(s);
+const balePilot = new URLSearchParams(window.location.search).get('entry')==='bale';
 const fmt = n => (Math.round(n*100)/100).toLocaleString('en-US');
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -1406,6 +1407,9 @@ function selectTab(tab){
 }
 async function startApp(){
   resetUi();
+  if(balePilot && await rpc('kpi_bale_pilot_access') !== true){
+    throw new Error('پایلوت بله برای حساب کارشناسان فعالِ واحد برق و ابزار دقیق است.');
+  }
   const access=await rpc('kpi_access');
   if(access?.must_change_password){
     state.mustChangePassword=true;
@@ -1467,6 +1471,13 @@ function resetUi(){
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
+  if(balePilot){
+    document.body.dataset.entry='bale';
+    document.title='ثبت گزارش مهندسی در بله';
+    $('#authTitle').textContent='ثبت گزارش مهندسی در بله';
+    $('#appTitle').textContent='ثبت گزارش مهندسی';
+    $('#balePilotInfo').hidden=false;
+  }
   document.querySelectorAll('[data-chart-view]').forEach(select=>{
     select.addEventListener('change',render);
   });
@@ -1615,7 +1626,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     return isIos && /safari/i.test(ua) && !/crios|fxios|edgios|opios/i.test(ua);
   };
   const syncInstallButtons = () => {
-    const show = !isStandalone() && (Boolean(deferredInstall) || isIosSafari());
+    const show = !balePilot && !isStandalone() && (Boolean(deferredInstall) || isIosSafari());
     installBtns.forEach(b => { b.hidden = !show; });
   };
   window.addEventListener('beforeinstallprompt', e => {
