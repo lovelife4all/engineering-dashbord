@@ -824,6 +824,9 @@ button:disabled{opacity:.55;cursor:not-allowed}
 #qualityDialog::backdrop{background:rgba(14,28,51,.68);backdrop-filter:blur(4px)}
 #qualityDialog ul{padding-right:19px;margin:12px 0;color:#85430d}
 textarea{width:100%;font:inherit;border:1px solid var(--line-strong);border-radius:10px;padding:9px 11px;resize:vertical}
+.score-edit{display:flex;align-items:center;gap:6px;min-width:150px}
+.score-edit input{width:66px;min-width:66px;text-align:center;font-variant-numeric:tabular-nums}
+#scoresTable td:first-child{white-space:normal;min-width:16em;max-width:42em;overflow-wrap:anywhere}
 .print-report{display:none}
 @media(max-width:1050px){.priority-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.priority-grid{grid-template-columns:1fr}}

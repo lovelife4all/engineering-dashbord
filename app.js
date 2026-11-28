@@ -6,7 +6,7 @@ const SRC_FA = {pargar:'پرگار', pmis:'PMIS', inquiry:'استعلام', meet
                 procedure:'دستورالعمل', gis:'GIS', other:'سایر'};
 const COLORS = ['#1d5bd8','#12b886','#7048e8','#f59f00','#e64980','#15aabf','#2f9e44','#e8590c','#495057','#845ef7'];
 
-const state = { logs:[], personnel:[], activities:[], stakeholders:[], projects:[], submissions:[],
+const state = { logs:[], personnel:[], activities:[], activityScoreMap:[], activityScores:[], stakeholders:[], projects:[], submissions:[],
                 month:null, dept:'', person:'' };
 
 const $ = s => document.querySelector(s);
@@ -100,8 +100,8 @@ async function api(path, opts={}){
 
 /* ================= بارگذاری بر اساس نقش ================= */
 const ROLE_LABEL={admin:'ادمین',management:'مدیریت',head:'رییس دپارتمان',expert:'کارشناس'};
-const ROLE_TABS={admin:['dash','form','table','accounts','catalog'],management:['dash'],
-                 head:['dash','table','catalog'],expert:['form']};
+const ROLE_TABS={admin:['dash','scores','form','table','accounts','catalog'],management:['dash','scores'],
+                 head:['dash','scores','table','catalog'],expert:['form']};
 function rpc(name, payload={}){
   return api('rpc/'+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
 }
@@ -120,20 +120,25 @@ async function loadAll(){
   if(role==='management'||role==='head') data=await rpc('kpi_dashboard');
   else if(role==='expert') data=await rpc('kpi_expert_form');
   else if(role==='admin') {
-    const [logs,personnel,activities,stakeholders,projects,submissions]=await Promise.all([
-      allPages('activity_logs?select=id,period_year,period_month,hours,doc_count,source,letter_date,notes,quality_reason,activity_id,stakeholder_id,project_id,employee:personnel(id,department:departments(name_fa),name_en),activity:activities(general_fa,specific_title,effort_score,value_score),stakeholder:stakeholders(name_fa)&order=id'),
-      allPages('personnel?select=id,employee_no,name_en,active,department:departments(name_fa)&order=name_en,id'),
+    const [logs,personnel,activities,stakeholders,projects,submissions,activityScoreMap]=await Promise.all([
+      allPages('activity_logs?select=id,period_year,period_month,hours,doc_count,source,letter_date,notes,quality_reason,activity_id,stakeholder_id,project_id,employee:personnel(id,department:departments(id,name_fa),name_en),activity:activities(general_fa,specific_title,effort_score,value_score),stakeholder:stakeholders(name_fa)&order=id'),
+      allPages('personnel?select=id,employee_no,name_en,active,department:departments(id,name_fa)&order=name_en,id'),
       allPages('activities?select=id,general_fa,specific_title,effort_score,value_score,avg_hours_doc&order=general_fa,id'),
       allPages('stakeholders?select=id,name_fa,active&order=name_fa,id'),
       allPages('projects?select=id,name_fa,active&order=name_fa,id'),
       allPages('monthly_submissions?select=employee_id,period_year,period_month,status&order=id'),
+      rpc('kpi_effort_score_map'),
     ]);
-    data={logs,personnel,activities,stakeholders,projects,submissions};
+    data={logs,personnel,activities,stakeholders,projects,submissions,activityScoreMap};
   } else throw new Error('برای این حساب هنوز نقشی تعیین نشده است. با ادمین تماس بگیرید.');
   if(role!=='expert') data.projectLoad=await rpc('kpi_project_load',{p_demo:false}).catch(()=>null);
   if(!session || state.role!==role || state.demoScope!==scope) return;
-  const {projectLoad=null,logs,personnel,activities=[],stakeholders=[],projects=[],submissions,scope:deptScope=null}=data;
-  Object.assign(state,{logs,personnel,activities,stakeholders,projects,submissions,projectLoad,deptScope});
+  const {projectLoad=null,logs,personnel,activities=[],stakeholders=[],projects=[],submissions,scope:deptScope=null,activityScoreMap=[]}=data;
+  if(role==='admin'&&Array.isArray(activityScoreMap)){
+    const scoreMap=new Map(activityScoreMap.map(x=>[`${x.department_id}:${x.activity_id}`,Number(x.effort_score)]));
+    logs.forEach(l=>{const key=`${l.employee?.department?.id}:${l.activity_id}`;if(l.activity&&scoreMap.has(key))l.activity.effort_score=scoreMap.get(key);});
+  }
+  Object.assign(state,{logs,personnel,activities,activityScoreMap,stakeholders,projects,submissions,projectLoad,deptScope});
   const months=[...new Set(logs.map(l=>l.period_year*100+l.period_month))].sort((a,b)=>a-b);
   const now=new Intl.DateTimeFormat('en-US-u-ca-persian',{year:'numeric',month:'numeric'}).formatToParts(new Date());
   const yr=Number(now.find(p=>p.type==='year').value), mo=Number(now.find(p=>p.type==='month').value);
@@ -355,20 +360,22 @@ function donut(data, opt={}){
 /* حبابی Value-Effort */
 function bubbles(pts){
   if(!pts.length) return emptyBox('داده‌ای برای نمایش نیست');
-  const W=520,H=270,padL=46,padR=18,padT=26,padB=44;
-  const maxX=7.5,minX=.5,maxY=7.5,minY=.5;
+  const W=520,H=300,padL=46,padR=18,padT=26,padB=44;
+  const maxX=7.5,minX=.5,maxY=10.5,minY=.5;
   const maxH=Math.max(...pts.map(p=>p.h),1);
   const X=v=>padL+(W-padL-padR)*(v-minX)/(maxX-minX);
   const Y=v=>H-padB-(H-padT-padB)*(v-minY)/(maxY-minY);
   let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="direction:ltr">`;
   for(let g=1;g<=7;g++){
     s+=`<line x1="${X(g)}" y1="${padT}" x2="${X(g)}" y2="${H-padB}" stroke="#e2e8f0" stroke-opacity=".75"/>`;
-    s+=`<line x1="${padL}" y1="${Y(g)}" x2="${W-padR}" y2="${Y(g)}" stroke="#e2e8f0" stroke-opacity=".75"/>`;
     s+=`<text x="${X(g)}" y="${H-padB+16}" text-anchor="middle" font-size="10.5" fill="#475569">${g}</text>`;
+  }
+  for(let g=1;g<=10;g++){
+    s+=`<line x1="${padL}" y1="${Y(g)}" x2="${W-padR}" y2="${Y(g)}" stroke="#e2e8f0" stroke-opacity=".75"/>`;
     s+=`<text x="${padL-9}" y="${Y(g)+4}" text-anchor="end" font-size="10.5" fill="#475569">${g}</text>`;
   }
   s+=`<line x1="${X(4.5)}" y1="${padT}" x2="${X(4.5)}" y2="${H-padB}" stroke="#94a3b8" stroke-dasharray="4 4"/>`;
-  s+=`<line x1="${padL}" y1="${Y(4.5)}" x2="${W-padR}" y2="${Y(4.5)}" stroke="#94a3b8" stroke-dasharray="4 4"/>`;
+  s+=`<line x1="${padL}" y1="${Y(5.5)}" x2="${W-padR}" y2="${Y(5.5)}" stroke="#94a3b8" stroke-dasharray="4 4"/>`;
   pts.forEach((p,i)=>{
     const rad=8+22*Math.sqrt(p.h/maxH);
     const col=COLORS[i%COLORS.length];
@@ -450,9 +457,10 @@ function render(){
   // ---- Value-Effort ----
   const veAgg={};
   logs.forEach(l=>{ if(!l.activity) return;
-    const k=l.activity.general_fa+'||'+(l.activity.specific_title||'');
+    const deptId=l.employee?.department?.id||'',deptName=l.employee?.department?.name_fa||'';
+    const k=[l.activity_id||l.activity.id,l.activity.general_fa,l.activity.specific_title||'',deptId,l.activity.effort_score,l.activity.value_score].join('||');
     if(!veAgg[k]) veAgg[k]={x:Number(l.activity.value_score), y:Number(l.activity.effort_score),
-      h:0, n:0, t:l.activity.specific_title||l.activity.general_fa};
+      h:0, n:0, t:(l.activity.specific_title||l.activity.general_fa)+(['admin','management'].includes(state.role)&&deptName?` · ${deptName}`:'')};
     veAgg[k].h+=Number(l.hours); veAgg[k].n+=countOf(l);
   });
   $('#chVE').innerHTML=bubbles(Object.values(veAgg));
@@ -496,10 +504,10 @@ function render(){
 }
 
 const QUADRANTS=[
-  {t:'ارزش بالا · تلاش پایین',action:'گزینهٔ اول برای تسریع یا گسترش',match:(v,e)=>v>=5&&e<=4},
-  {t:'ارزش بالا · تلاش بالا',action:'برای ظرفیت و گلوگاه‌ها برنامه‌ریزی شود',match:(v,e)=>v>=5&&e>=5},
-  {t:'ارزش پایین · تلاش بالا',action:'نامزد ساده‌سازی یا بازبینی فرایند',match:(v,e)=>v<=4&&e>=5},
-  {t:'ارزش پایین · تلاش پایین',action:'استانداردسازی یا تجمیع بررسی شود',match:(v,e)=>v<=4&&e<=4},
+  {t:'ارزش بالا · تلاش پایین',action:'گزینهٔ اول برای تسریع یا گسترش',match:(v,e)=>v>=5&&e<=5},
+  {t:'ارزش بالا · تلاش بالا',action:'برای ظرفیت و گلوگاه‌ها برنامه‌ریزی شود',match:(v,e)=>v>=5&&e>=6},
+  {t:'ارزش پایین · تلاش بالا',action:'نامزد ساده‌سازی یا بازبینی فرایند',match:(v,e)=>v<=4&&e>=6},
+  {t:'ارزش پایین · تلاش پایین',action:'استانداردسازی یا تجمیع بررسی شود',match:(v,e)=>v<=4&&e<=5},
 ];
 const percent=(a,b)=>b>0?100*a/b:0;
 const sumHours=rows=>rows.reduce((sum,r)=>sum+Number(r.hours),0);
@@ -522,7 +530,7 @@ const actLabel=n=>`${faN(n)} فعالیت`;
 
 function renderPriorities(items,hours){
   const groups=QUADRANTS.map(q=>{
-    const group=items.filter(p=>p.x>=1&&p.x<=7&&p.y>=1&&p.y<=7&&q.match(p.x,p.y)).sort((a,b)=>b.h-a.h);
+    const group=items.filter(p=>p.x>=1&&p.x<=7&&p.y>=1&&p.y<=10&&q.match(p.x,p.y)).sort((a,b)=>b.h-a.h);
     return {...q,count:group.length,hours:group.reduce((s,p)=>s+p.h,0),
       events:group.reduce((s,p)=>s+(p.n||0),0),leading:group.find(p=>p.h>0)?.t};
   });
@@ -638,9 +646,17 @@ function refreshActivities(){
   updateHint();
 }
 function currentActivity(){ return state.activities.find(a=>String(a.id)===$('#eActivity').value); }
+function activityEffort(a){
+  if(state.role==='admin'){
+    const person=state.personnel.find(p=>String(p.id)===$('#ePerson').value),deptId=person?.department?.id;
+    const score=state.activityScoreMap.find(x=>Number(x.activity_id)===Number(a.id)&&Number(x.department_id)===Number(deptId));
+    if(score) return score.effort_score;
+  }
+  return a.effort_score;
+}
 function updateHint(){
   const a=currentActivity(); if(!a) { $('#eHint').textContent='—'; return; }
-  let t=`💡 Effort: ${a.effort_score} · Value: ${a.value_score}`;
+  let t=`💡 Effort: ${activityEffort(a)} · Value: ${a.value_score}`;
   if(a.avg_hours_doc) t+=` · میانگین ${a.avg_hours_doc} ساعت/مدرک`;
   if(a.avg_hours_doc && Number($('#eDocs').value)>0) t+=` → پیشنهاد ${fmt(Number($('#eDocs').value)*Number(a.avg_hours_doc))} نفرساعت`;
   $('#eHint').textContent=t;
@@ -875,6 +891,48 @@ function renderBulkResult(rows){
   }</tbody></table>`;
 }
 
+async function loadActivityScores(){
+  if(!['admin','management','head'].includes(state.role)) return;
+  $('#scoresTable').innerHTML=emptyBox('در حال دریافت امتیازها…');
+  try{
+    state.activityScores=await rpc('kpi_activity_score_list');
+    if(!['admin','management','head'].includes(state.role)) return;
+    $('#scoreTitle').textContent=state.role==='head'?'تعیین Effort واحد':'تعیین Value فعالیت‌ها';
+    $('#scoreScope').textContent=state.role==='head'
+      ?`Effort فقط برای واحد «${state.deptScope?.departments?.join('، ')||'واحد شما'}» تغییر می‌کند؛ مقیاس ۱ تا ۱۰.`
+      :state.role==='management'?'Value هر نوع فعالیت به‌صورت سراسری تنظیم می‌شود؛ مقیاس فعلی ۱ تا ۷ است. Effort را رییس هر واحد تعیین می‌کند.'
+      :'ادمین می‌تواند Value سراسری را تنظیم کند؛ Effort هر واحد را رییس همان واحد تعیین می‌کند.';
+    renderActivityScores();
+  }catch(e){$('#scoresTable').innerHTML=emptyBox('دریافت فهرست امتیازها ناموفق بود: '+e.message);}
+}
+function renderActivityScores(){
+  const term=$('#scoreSearch').value.trim().toLocaleLowerCase('fa');
+  const rows=(state.activityScores||[]).filter(r=>!term||`${r.general_fa} ${r.specific_title||''}`.toLocaleLowerCase('fa').includes(term));
+  if(!rows.length){$('#scoresTable').innerHTML=emptyBox('نوع فعالیتی با این جست‌وجو پیدا نشد.');return;}
+  const canEffort=state.role==='head',canValue=['management','admin'].includes(state.role);
+  $('#scoresTable').innerHTML=`<p class="hint">${faN(rows.length)} نوع فعالیت</p><table><thead><tr><th>نوع فعالیت</th>${canEffort?'<th>Effort · ۱ تا ۱۰</th>':''}<th>Value · ۱ تا ۷</th></tr></thead><tbody>${rows.map(r=>{
+    const title=r.specific_title?`${r.general_fa} — ${r.specific_title}`:r.general_fa;
+    const effortCell=canEffort?`<div class="score-edit"><input type="number" min="1" max="10" step="1" id="effortScore-${r.activity_id}" value="${Number(r.effort_score)}"><button type="button" class="ghost" data-score-action="effort" data-score-id="${r.activity_id}">ذخیره</button></div>`:`<span>${faN(r.effort_score??'—')}</span>`;
+    const valueCell=canValue?`<div class="score-edit"><input type="number" min="1" max="7" step="1" id="valueScore-${r.activity_id}" value="${Number(r.value_score)}"><button type="button" class="ghost" data-score-action="value" data-score-id="${r.activity_id}">ذخیره</button></div>`:`<span>${faN(r.value_score??'—')}</span>`;
+    return `<tr><td dir="auto">${esc(title)}</td>${canEffort?`<td>${effortCell}</td>`:''}<td>${valueCell}</td></tr>`;
+  }).join('')}</tbody></table>`;
+}
+async function saveActivityScore(kind,id){
+  if(!['effort','value'].includes(kind))return;
+  const role=state.role,field=kind==='effort'?'effort':'value';
+  const input=$(`#${field}Score-${id}`),score=Number(input?.value),max=kind==='effort'?10:7;
+  if(!Number.isInteger(score)||score<1||score>max){$('#scoreMsg').className='msg err';$('#scoreMsg').textContent=`امتیاز باید عدد صحیح بین ۱ تا ${faN(max)} باشد.`;return;}
+  const buttons=document.querySelectorAll(`[data-score-action="${kind}"][data-score-id="${id}"]`);buttons.forEach(b=>b.disabled=true);
+  $('#scoreMsg').className='msg';$('#scoreMsg').textContent='در حال ذخیره…';
+  try{
+    await rpc(kind==='effort'?'kpi_set_activity_effort':'kpi_set_activity_value',kind==='effort'?{p_activity_id:Number(id),p_effort_score:score}:{p_activity_id:Number(id),p_value_score:score});
+    await Promise.all([loadActivityScores(),loadAll()]);
+    if(role!=='expert')render();
+    $('#scoreMsg').className='msg ok';$('#scoreMsg').textContent=kind==='effort'?'Effort این فعالیت برای واحد شما ذخیره شد.':'Value این فعالیت ذخیره شد.';
+  }catch(e){$('#scoreMsg').className='msg err';$('#scoreMsg').textContent=e.message;}
+  finally{buttons.forEach(b=>b.disabled=false);}
+}
+
 let catalogRows=[],catalogSeq=0,catalogBusy=false;
 function catMsg(text,error=false){const el=$('#catMsg');el.className='msg '+(error?'err':'ok');el.textContent=text;}
 function setCatalogFields(){
@@ -1010,6 +1068,7 @@ function selectTab(tab){
   if(tab==='form') renderMyRows();
   if(tab==='catalog') {catMsg('');loadCatalog();}
   if(tab==='accounts') {accMsg('');loadAccounts();}
+  if(tab==='scores') {$('#scoreMsg').textContent='';loadActivityScores();}
 }
 async function startApp(){
   resetUi();
@@ -1036,7 +1095,7 @@ async function startApp(){
   showApp();
 }
 function resetUi(){
-  Object.assign(state,{role:null,employeeId:null,employeeNo:null,mustChangePassword:false,ready:false,tab:null,demo:false,demoData:null,realFilters:null,demoScope:Symbol(),projectLoad:null,deptScope:null,month:null,dept:'',person:'',logs:[],personnel:[],activities:[],stakeholders:[],projects:[],submissions:[]});
+  Object.assign(state,{role:null,employeeId:null,employeeNo:null,mustChangePassword:false,ready:false,tab:null,demo:false,demoData:null,realFilters:null,demoScope:Symbol(),projectLoad:null,deptScope:null,month:null,dept:'',person:'',logs:[],personnel:[],activities:[],activityScoreMap:[],activityScores:[],stakeholders:[],projects:[],submissions:[]});
   $('#appRoot').classList.remove('force-password');
   $('#cancelPassword').hidden=false;
   $('#passwordTitle').textContent='تغییر رمز عبور';
@@ -1058,6 +1117,7 @@ function resetUi(){
   $('#roleForm').reset();
   $('#roleType').dispatchEvent(new Event('change'));
   $('#newAccountForm')?.reset(); $('#accountsTable').textContent=''; accMsg('');
+  $('#scoresTable').textContent=''; $('#scoreMsg').textContent=''; $('#scoreSearch').value='';
   $('#bulkForm')?.reset(); $('#bulkResult').textContent=''; $('#bulkMsg').textContent='';
   $('#staffBulkForm')?.reset(); $('#staffBulkResult').textContent=''; $('#staffBulkMsg').textContent='';
   $('#scopeNote').hidden=true; $('#scopeNote').textContent='';
@@ -1105,6 +1165,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
   $('#accRefresh').onclick=loadAccounts;
   $('#bulkForm').onsubmit=createAccountsBulk;
   $('#staffBulkForm').onsubmit=createStaffAccounts;
+  $('#scoreSearch').oninput=renderActivityScores;
+  $('#scoreRefresh').onclick=loadActivityScores;
+  $('#scoresTable').onclick=e=>{const b=e.target.closest('[data-score-action]');if(b)saveActivityScore(b.dataset.scoreAction,b.dataset.scoreId);};
   $('#bulkPreview').onclick=()=>{
     const rows=parseBulk($('#bulkList').value), bad=rows.filter(r=>r.error).length;
     $('#bulkMsg').className='msg '+(bad?'err':'ok');

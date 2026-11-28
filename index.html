@@ -13,7 +13,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css?v=improve6">
+<link rel="stylesheet" href="style.css?v=improve7">
 </head>
 <body data-bg="blueprint">
 
@@ -53,6 +53,7 @@
   </div>
   <nav class="tabs">
     <button class="tab active" data-tab="dash">📈 داشبورد</button>
+    <button class="tab" data-tab="scores">امتیازدهی فعالیت‌ها</button>
     <button class="tab" data-tab="form">📝 فرم ورود ماهانه</button>
     <button class="tab" data-tab="table">🗂 جدول داده‌ها</button>
     <button class="tab" data-tab="accounts">حساب‌ها و نقش‌ها</button>
@@ -136,7 +137,7 @@
     </div>
     <div class="card c3">
       <h3>اولویت‌بندی ارزش و تلاش</h3>
-      <p class="hint">امتیاز ۵ تا ۷ «بالا» و ۱ تا ۴ «پایین» است. سهم هر بخش از کل نفرساعت همین فیلتر محاسبه می‌شود. پیشنهادها برای بازبینی فعالیت‌اند، نه رتبه‌بندی افراد.</p>
+      <p class="hint">Value: امتیاز ۵ تا ۷ «بالا» و ۱ تا ۴ «پایین»؛ Effort: امتیاز ۶ تا ۱۰ «بالا» و ۱ تا ۵ «پایین» است. سهم هر بخش از کل نفرساعت همین فیلتر محاسبه می‌شود؛ پیشنهادها برای بازبینی فعالیت‌اند، نه رتبه‌بندی افراد.</p>
       <div id="priorityGrid" class="priority-grid"></div>
     </div>
     <div class="card c3">
@@ -156,6 +157,21 @@
       <h3>سهم منابع ثبت (Pargar / PMIS / استعلام / جلسات / …) <span class="hint">· تعداد فعالیت در راهنما</span></h3>
       <div id="chSrc" class="chart"></div>
     </div>
+  </section>
+</main>
+
+<!-- ============ پنل امتیازدهی فعالیت‌ها ============ -->
+<main id="tab-scores" class="tabpane">
+  <section class="card formcard">
+    <div class="section-head"><div>
+      <h3 id="scoreTitle">امتیازدهی فعالیت‌ها</h3>
+      <p class="hint" id="scoreScope">امتیازها بر اساس نقش شما قابل ویرایش‌اند.</p>
+    </div>
+      <label>جست‌وجوی فعالیت<input type="search" id="scoreSearch" placeholder="نام نوع فعالیت"></label>
+      <button type="button" class="ghost" id="scoreRefresh">به‌روزرسانی</button>
+    </div>
+    <p id="scoreMsg" class="msg" role="status"></p>
+    <div id="scoresTable" class="tblwrap"></div>
   </section>
 </main>
 
@@ -343,7 +359,7 @@ admin2@company.ir | admin | رمزاختیاری"></textarea>
 
 <article id="printReport" class="print-report" dir="rtl" aria-label="گزارش قابل چاپ"></article>
 
-<script src="config.js?v=improve6"></script>
-<script src="app.js?v=improve6"></script>
+<script src="config.js?v=improve7"></script>
+<script src="app.js?v=improve7"></script>
 </body>
 </html>
