@@ -1500,24 +1500,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
   };
   $('#authPass').onkeydown=e=>{ if(e.key==='Enter') $('#btnLogin').click(); };
 
-  // سوییچر دو طرح پیش‌زمینه
-  const setBgTheme = bg => {
-    const next = bg === 'energy' ? 'energy' : 'blueprint';
-    document.body.dataset.bg = next;
-    document.querySelectorAll('[data-bg-choice]').forEach(btn => {
-      const active = btn.dataset.bgChoice === next;
-      btn.classList.toggle('active', active);
-      btn.setAttribute('aria-pressed', String(active));
-    });
-    try{ localStorage.setItem('engkpi_bg', next); }catch(e){}
-  };
-  let savedBg = null;
-  try{ savedBg = localStorage.getItem('engkpi_bg'); }catch(e){}
-  setBgTheme(savedBg || 'blueprint');
-  document.querySelectorAll('[data-bg-choice]').forEach(btn => {
-    btn.onclick = () => setBgTheme(btn.dataset.bgChoice);
-  });
-
   // وب‌اپلیکیشن قابل نصب (PWA + Service Worker + راهنمای iOS)
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(()=>{});

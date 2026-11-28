@@ -17,13 +17,8 @@
     --site-gutter: clamp(14px, 3.3vw, 50px);
     --station-image: url("./assets/gas-compressor-station.webp");
   }
-  body[data-bg] {
+  body {
     background: radial-gradient(ellipse at 85% 0%, #daeae6, transparent 48rem), var(--bg);
-  }
-  body[data-bg="energy"] {
-    background-image: linear-gradient(#1758580a 1px, transparent 1px),
-      linear-gradient(90deg, #1758580a 1px, transparent 1px);
-    background-size: 28px 28px;
   }
   .topbar {
     padding-inline: var(--site-gutter);
@@ -39,7 +34,7 @@
   }
   .topbar .sub { color: #bccecf; }
   .topbar .tab.active { color: #104d45; background: #d8f4ec; }
-  .bg-pill.active { color: #104d45; background: #d8f4ec; }
+
   .tabpane { padding-inline: var(--site-gutter); }
   .filters, #dataMode, .scope-note { margin-inline: var(--site-gutter); }
   .card, .filters, .data-mode { backdrop-filter: none; }
@@ -71,11 +66,6 @@
     background-size: cover;
     border-bottom: 3px solid #75b9a5;
   }
-  body[data-bg="energy"] .management-hero {
-    background-image: linear-gradient(270deg, #0f2b33 8%, #102f37e8 48%, #102f3760 100%),
-      repeating-linear-gradient(90deg, transparent 0 39px, #a2edda35 39px 40px),
-      repeating-linear-gradient(0deg, transparent 0 39px, #a2edda35 39px 40px), var(--station-image);
-  }
   .management-org { color: #a4dfd1; font-size: 13px; font-weight: 700; margin-bottom: 4px; }
   .management-hero h2 { color: #fff; font-size: clamp(25px, 3vw, 42px); line-height: 1.35; }
   .management-hero .hint { color: #d5e7e7; margin-top: 8px; }
@@ -105,7 +95,7 @@
   .management-trend rect[fill="#ac5d06"] { fill: #ad7228; }
   .management-overview .tblwrap > .hint { padding: 8px 12px; }
   .portfolio-summary span { color: #184e48; background: #eef7f4; border-color: #d6e9e3; }
-  body[data-bg] .auth-screen {
+  body .auth-screen {
     background-color: #0d2930;
     background-image: linear-gradient(270deg, #0e2c35f2 4%, #102d36a6 51%, #122d3440), var(--station-image);
     background-size: cover;
@@ -114,11 +104,6 @@
     padding-inline: clamp(24px, 9vw, 180px);
     justify-content: safe center;
   }
-  body[data-bg="energy"] .auth-screen {
-    background-image: linear-gradient(270deg, #112f37f5 4%, #102d36bb 52%, #102d3650),
-      repeating-linear-gradient(90deg, transparent 0 39px, #a2edda35 39px 40px),
-      repeating-linear-gradient(0deg, transparent 0 39px, #a2edda35 39px 40px), var(--station-image);
-  }
   .auth-screen > .auth-card {
     border: 1px solid #b4d9d0;
     border-top: 3px solid #2f8b7e;
@@ -126,11 +111,11 @@
     margin-block: 0;
   }
   .auth-screen .auth-card h2 { font-size: clamp(18px, 2.3vw, 24px); line-height: 1.5; }
-  .auth-bg-switcher { align-self: flex-start; }
+
   @media (max-width: 768px) {
     .management-hero { min-height: 190px; background-position: center, 24% center; }
     .management-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    body[data-bg] .auth-screen { align-items: center; padding-inline: 14px; background-position: center, 25% center; }
-    .auth-bg-switcher { align-self: center; }
+    body .auth-screen { align-items: center; padding-inline: 14px; background-position: center, 25% center; }
+
   }
 }
