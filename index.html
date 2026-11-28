@@ -13,7 +13,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css?v=improve3">
+<link rel="stylesheet" href="style.css?v=improve4">
 </head>
 <body data-bg="blueprint">
 
@@ -108,7 +108,7 @@
 <main id="tab-dash" class="tabpane active">
 
   <section class="kpis" id="kpis">
-    <div class="kpi"><div class="kpi-v" id="kpiHours">—</div><div class="kpi-l">نفرساعت ماه</div><div class="kpi-d" id="kpiHoursD"></div></div>
+    <div class="kpi"><div class="kpi-v" id="kpiHours">—</div><div class="kpi-l">نفرساعت ماه</div><div class="kpi-count" id="kpiHoursC"></div><div class="kpi-d" id="kpiHoursD"></div></div>
     <div class="kpi"><div class="kpi-v" id="kpiMom">—</div><div class="kpi-l">رشد نسبت به ماه قبل</div><div class="kpi-d" id="kpiMomD"></div></div>
     <div class="kpi"><div class="kpi-v" id="kpiPeople">—</div><div class="kpi-l">کارشناس فعال</div><div class="kpi-d" id="kpiPeopleD"></div></div>
     <div class="kpi"><div class="kpi-v" id="kpiDocs">—</div><div class="kpi-l">مدرک / موضوع بررسی‌شده</div><div class="kpi-d" id="kpiDocsD"></div></div>
@@ -117,7 +117,7 @@
 
   <section class="grid">
     <div class="card c2">
-      <h3>روند ماهانه نفرساعت <span class="hint" id="trendDemoLabel" hidden>· مقایسهٔ داده‌های آزمایشی با شهریور واقعی</span></h3>
+      <h3>روند ماهانه نفرساعت و تعداد فعالیت <span class="hint" id="trendDemoLabel" hidden>· مقایسهٔ داده‌های آزمایشی با شهریور واقعی</span></h3>
       <div id="chTrend" class="chart"></div>
     </div>
     <div class="card">
@@ -125,11 +125,11 @@
       <div id="chSub" class="chart"></div>
     </div>
     <div class="card c2">
-      <h3>بار دپارتمان‌ها در مقابل ظرفیت (۱۸۰ ساعت/نفر)</h3>
+      <h3>بار دپارتمان‌ها در مقابل ظرفیت (۱۸۰ ساعت/نفر) <span class="hint">· در کنار هر نوار، تعداد فعالیت</span></h3>
       <div id="chDept" class="chart"></div>
     </div>
     <div class="card">
-      <h3>Value در مقابل Effort <span class="hint">(حجم = نفرساعت)</span></h3>
+      <h3>Value در مقابل Effort <span class="hint">(حجم = نفرساعت · تعداد در راهنما)</span></h3>
       <div id="chVE" class="chart"></div>
     </div>
     <div class="card c3">
@@ -138,20 +138,20 @@
       <div id="priorityGrid" class="priority-grid"></div>
     </div>
     <div class="card c3">
-      <div class="section-head"><div><h3>تمرکز بار کاری</h3><p class="hint">سهم از کل نفرساعت محدوده، با تفکیک واحدهای درگیر</p></div>
+      <div class="section-head"><div><h3>تمرکز بار کاری</h3><p class="hint">سهم از کل نفرساعت محدوده و تعداد فعالیت هر مورد، با تفکیک واحدهای درگیر</p></div>
       <label>گروه‌بندی <select id="portfolioBy"><option value="project">پروژه</option><option value="stakeholder">ذینفع</option></select></label></div>
       <div id="portfolioSummary" class="portfolio-summary"></div><div id="portfolioTable" class="tblwrap"></div>
     </div>
     <div class="card c2">
-      <h3>نفرساعت به تفکیک فعالیت</h3>
+      <h3>نفرساعت و تعداد فعالیت به تفکیک فعالیت</h3>
       <div id="chAct" class="chart"></div>
     </div>
     <div class="card c2">
-      <h3>مقایسه ذینفعان (نفرساعت)</h3>
+      <h3>مقایسه ذینفعان (نفرساعت و تعداد فعالیت)</h3>
       <div id="chStk" class="chart"></div>
     </div>
     <div class="card c2">
-      <h3>سهم منابع ثبت (Pargar / PMIS / استعلام / جلسات / …)</h3>
+      <h3>سهم منابع ثبت (Pargar / PMIS / استعلام / جلسات / …) <span class="hint">· تعداد فعالیت در راهنما</span></h3>
       <div id="chSrc" class="chart"></div>
     </div>
   </section>
@@ -283,7 +283,7 @@
 
 <article id="printReport" class="print-report" dir="rtl" aria-label="گزارش قابل چاپ"></article>
 
-<script src="config.js?v=improve3"></script>
-<script src="app.js?v=improve3"></script>
+<script src="config.js?v=improve4"></script>
+<script src="app.js?v=improve4"></script>
 </body>
 </html>
