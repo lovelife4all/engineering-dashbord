@@ -1,16 +1,16 @@
 /* Service Worker — داشبورد عملکرد معاونت مهندسی */
 'use strict';
 
-const CACHE_NAME = 'engkpi-shell-v10';
+const CACHE_NAME = 'engkpi-shell-v11';
 const SHELL_ASSETS = [
   './',
   './index.html',
-  './style.css?v=industry10',
-  './management.css?v=industry10',
-  './industry.css?v=industry10',
+  './style.css?v=sources11',
+  './management.css?v=sources11',
+  './industry.css?v=sources11',
   './assets/gas-compressor-station.webp',
-  './app.js?v=industry10',
-  './config.js?v=industry10',
+  './app.js?v=sources11',
+  './config.js?v=sources11',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
