@@ -13,7 +13,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css?v=improve5">
+<link rel="stylesheet" href="style.css?v=improve6">
 </head>
 <body data-bg="blueprint">
 
@@ -30,7 +30,7 @@
     </div>
     <h2>داشبورد عملکرد معاونت مهندسی</h2>
     <p class="auth-sub">شرکت مهندسی و توسعه گاز ایران · سامانه پایش نفرساعت و بهره‌وری</p>
-    <label>ایمیل حساب<input type="email" id="authEmail" placeholder="name@company.ir" autocomplete="email"></label>
+    <label>کد پرسنلی / ایمیل حساب<input type="text" id="authEmail" placeholder="کد پرسنلی یا name@company.ir" autocomplete="username" inputmode="text"></label>
     <label>رمز عبور<input type="password" id="authPass" placeholder="رمز عبور" autocomplete="current-password"></label>
     <button class="primary auth-btn" id="btnLogin">ورود به سامانه</button>
     <button type="button" class="ghost auth-install-btn" id="authInstallBtn" hidden>📲 نصب نسخه وب‌اپلیکیشن روی گوشی / دسکتاپ</button>
@@ -216,8 +216,22 @@
 
 <main id="tab-accounts" class="tabpane">
   <section class="card formcard">
-    <h3>ساخت حساب کاربری</h3>
-    <p class="hint">ادمین می‌تواند برای افراد واحدهای مختلف حساب بسازد و همان‌جا نقش و دسترسی بدهد. برای «کارشناس» و «رییس دپارتمان»، ابتدا فرد را در فهرست کارشناسان اضافه کنید و کد پرسنلی فعالش را وارد کنید.</p>
+    <h3>ساخت حساب پرسنلی با کد</h3>
+    <p class="hint">هر خط: <code dir="ltr">کد پرسنلی | نقش</code>. نام کاربری و رمز اولیه هر دو کد پرسنلی است؛ پس از اولین ورود، تغییر رمز حداقل ۱۲ کاراکتری اجباری می‌شود. فقط افراد فعالِ ثبت‌شده در واحدها پذیرفته می‌شوند.</p>
+    <form id="staffBulkForm" autocomplete="off">
+      <textarea id="staffBulkList" rows="5" dir="ltr" placeholder="531029 | head
+548947 | expert"></textarea>
+      <div class="actions">
+        <button type="submit" class="primary" id="staffBulkCreate">ساخت حساب‌ها</button>
+        <span id="staffBulkMsg" class="msg" role="status"></span>
+      </div>
+    </form>
+    <div id="staffBulkResult" class="tblwrap"></div>
+  </section>
+
+  <section class="card formcard">
+    <h3>ساخت حساب کاربری با ایمیل</h3>
+    <p class="hint">برای حساب‌های ادمین یا مدیریت که با ایمیل وارد می‌شوند. حساب پرسنلی را با فرم «ساخت حساب پرسنلی با کد» ایجاد کنید.</p>
     <form id="newAccountForm" class="formgrid" autocomplete="off">
       <label>ایمیل<input type="email" required id="accEmail" placeholder="name@company.ir"></label>
       <label>رمز عبور اولیه (حداقل ۸ کاراکتر)
@@ -226,8 +240,6 @@
       </label>
       <label>نقش
         <select id="accRole">
-          <option value="expert">کارشناس</option>
-          <option value="head">رییس دپارتمان</option>
           <option value="management">مدیریت</option>
           <option value="admin">ادمین</option>
         </select>
@@ -241,10 +253,10 @@
 
   <section class="card formcard">
     <h3>ساخت گروهی حساب‌ها (لیست واحدها و کارشناسان)</h3>
-    <p class="hint">هر خط یک نفر: <code dir="ltr">email | کد پرسنلی | نقش</code>. نقش اختیاری است و پیش‌فرض «کارشناس» است (مقادیر: expert، head، management، admin). اگر رمز خالی بماند، برای هر نفر یک رمز تصادفی ساخته و در جدول نتیجه نشان داده می‌شود. کد پرسنلی باید از قبل در فهرست کارشناسان با دپارتمان درست ثبت شده باشد.</p>
+    <p class="hint">این فرم فقط برای حساب‌های غیرپرسنلیِ مدیریت و ادمین است؛ هر خط: <code dir="ltr">email | management یا admin | رمز اختیاری</code>. برای پرسنل، از فرم بالاتر استفاده کنید تا نام کاربری کد پرسنلی باشد و تعویض رمز در ورود اول اجباری شود.</p>
     <form id="bulkForm" autocomplete="off">
-      <textarea id="bulkList" rows="6" dir="ltr" placeholder="ali@company.ir | 539190 | expert
-reza@company.ir | 552324 | head"></textarea>
+      <textarea id="bulkList" rows="6" dir="ltr" placeholder="manager@company.ir | management | رمزاختیاری
+admin2@company.ir | admin | رمزاختیاری"></textarea>
       <div class="actions">
         <button type="submit" class="primary" id="bulkCreate">ساخت حساب‌ها</button>
         <button type="button" class="ghost" id="bulkPreview">پیش‌نمایش و بررسی خطوط</button>
@@ -258,7 +270,7 @@ reza@company.ir | 552324 | head"></textarea>
     <h3>تعیین یا تغییر نقش حساب موجود</h3>
     <p class="hint">برای حسابی که از قبل ساخته شده، نقش و دسترسی را از این‌جا تعیین کنید. «لغو دسترسی» حساب را حذف نمی‌کند و فقط نقش را برمی‌دارد.</p>
     <form id="roleForm" class="formgrid" autocomplete="off">
-      <label>ایمیل حساب<input type="email" required id="roleEmail"></label>
+      <label>کد پرسنلی / ایمیل حساب<input type="text" required id="roleEmail" placeholder="کد پرسنلی یا ایمیل"></label>
       <label>نقش<select id="roleType"><option value="expert">کارشناس</option><option value="head">رییس دپارتمان</option><option value="management">مدیریت</option><option value="admin">ادمین</option><option value="none">لغو دسترسی</option></select></label>
       <label id="roleEmployeeLabel" hidden>کد پرسنلی<input type="text" id="roleEmployee" inputmode="numeric"></label>
       <div class="actions"><button type="submit" class="primary" id="roleSave">ذخیرهٔ نقش</button></div>
@@ -331,7 +343,7 @@ reza@company.ir | 552324 | head"></textarea>
 
 <article id="printReport" class="print-report" dir="rtl" aria-label="گزارش قابل چاپ"></article>
 
-<script src="config.js?v=improve5"></script>
-<script src="app.js?v=improve5"></script>
+<script src="config.js?v=improve6"></script>
+<script src="app.js?v=improve6"></script>
 </body>
 </html>

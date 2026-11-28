@@ -761,6 +761,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .data-mode[data-demo="true"] .ghost{color:#713f12;border-color:#a16207;background:#fffbeb}
 
 /* رییس دپارتمان: یادداشت محدودهٔ واحد */
+#appRoot.force-password>*:not(#passwordDialog){visibility:hidden!important;}
 .scope-note{
   margin:16px 22px 0;padding:12px 18px;
   border:1px solid #bfdbfe;border-right:4px solid #1d5bd8;border-radius:var(--r);

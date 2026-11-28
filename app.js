@@ -32,10 +32,16 @@ async function authFetch(path, body, method, token){
   if(!r.ok) throw new Error(j.error_description || j.msg || j.message || j.error || ('خطای ' + r.status));
   return j;
 }
-async function login(email, password){
+function authIdentifier(value){
+  const raw=String(value||'').trim();
+  const code=asciiDigits(raw);
+  return /^\d+$/.test(code) ? `${code}@staff.engkpi.invalid` : raw.toLowerCase();
+}
+async function login(identifier, password){
+  const email=authIdentifier(identifier);
   const s = await authFetch('token?grant_type=password', {email, password});
   saveSession({access_token: s.access_token, refresh_token: s.refresh_token,
-               email: email});
+               email, username: String(identifier||'').trim()});
 }
 async function tryRefresh(){
   if(!session || !session.refresh_token) return false;
@@ -52,6 +58,7 @@ async function restoreSession(){
   try{
     const u = await authFetch('user', null, 'GET', session.access_token);
     session.email = u.email || session.email;
+    session.username = session.email?.endsWith('@staff.engkpi.invalid') ? session.email.split('@')[0] : (session.username || session.email);
     saveSession(session);
     return true;
   }catch(e){
@@ -71,7 +78,7 @@ function showLogin(){
 function showApp(){
   $('#authScreen').style.display = 'none';
   $('#appRoot').style.display = 'block';
-  $('#whoami').textContent = `${ROLE_LABEL[state.role]} · ${session.email}`;
+  $('#whoami').textContent = `${ROLE_LABEL[state.role]} · ${state.employeeNo || session.username || session.email}`;
 }
 
 async function api(path, opts={}){
@@ -774,10 +781,37 @@ async function loadAccounts(){
 }
 function renderAccounts(rows){
   if(!rows?.length){ $('#accountsTable').innerHTML=emptyBox('حسابی ثبت نشده است.'); return; }
-  const now=faN(new Date().getTime()*0+rows.length);
-  $('#accountsTable').innerHTML=`<p class="hint">${now} حساب</p><table><thead><tr><th>ایمیل</th><th>نقش</th><th>کد پرسنلی</th><th>نام / واحد</th><th>وضعیت</th></tr></thead><tbody>${
-    rows.map(r=>`<tr><td class="ltr" dir="auto">${esc(r.email||'—')}</td><td><span class="catalog-pill${r.role==='none'?' archived':''}">${esc(ROLE_LABEL[r.role]||'بدون نقش')}</span></td><td class="ltr">${esc(r.employee_no||'—')}</td><td dir="auto">${esc([r.name,r.department].filter(Boolean).join(' — ')||'—')}</td><td>${r.active===false?'<span class="catalog-pill archived">کارشناس بایگانی‌شده</span>':'فعال'}</td></tr>`).join('')
+  const now=faN(rows.length);
+  $('#accountsTable').innerHTML=`<p class="hint">${now} حساب</p><table><thead><tr><th>نام کاربری</th><th>نقش</th><th>کد پرسنلی</th><th>نام / واحد</th><th>وضعیت ورود</th></tr></thead><tbody>${
+    rows.map(r=>`<tr><td class="ltr" dir="auto">${esc(r.username||r.email||'—')}</td><td><span class="catalog-pill${r.role==='none'?' archived':''}">${esc(ROLE_LABEL[r.role]||'بدون نقش')}</span></td><td class="ltr">${esc(r.employee_no||'—')}</td><td dir="auto">${esc([r.name,r.department].filter(Boolean).join(' — ')||'—')}</td><td>${r.active===false?'<span class="catalog-pill archived">کارشناس بایگانی‌شده</span>':r.must_change_password?'<span class="catalog-pill archived">تعویض رمز در ورود اول</span>':'فعال'}</td></tr>`).join('')
   }</tbody></table>`;
+}
+function parseStaffBulk(text){
+  const roles={expert:'expert',head:'head','کارشناس':'expert','رییس':'head','رییس دپارتمان':'head'};
+  return String(text||'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{
+    const parts=line.split(/[|,;\t]/).map(x=>x.trim());
+    const employeeNo=asciiDigits(parts[0]||'').replace(/\D/g,'');
+    const key=(parts[1]||'expert').toLowerCase();
+    const role=roles[key]||null;
+    return {employeeNo,role,error:!employeeNo?'کد پرسنلی وارد نشده':!role?'نقش نامعتبر':''};
+  });
+}
+function renderStaffBulk(rows){
+  if(!rows.length){ $('#staffBulkResult').innerHTML=emptyBox('خطی برای نمایش نیست.'); return; }
+  $('#staffBulkResult').innerHTML=`<table><thead><tr><th>کد پرسنلی</th><th>نقش</th><th>نام کاربری / رمز اولیه</th><th>نتیجه</th></tr></thead><tbody>${rows.map(r=>`<tr><td class="ltr">${esc(r.employeeNo)}</td><td>${esc(ROLE_LABEL[r.role]||'—')}</td><td class="ltr">${r.ok?esc(r.employeeNo):'—'}</td><td>${r.error?`<span class="catalog-pill archived">${esc(r.error)}</span>`:r.ok?'<span class="catalog-pill">ساخته/به‌روزرسانی شد؛ تغییر رمز اجباری است</span>':'—'}</td></tr>`).join('')}</tbody></table>`;
+}
+async function createStaffAccounts(e){
+  e.preventDefault();
+  if(state.role!=='admin') return;
+  const msg=$('#staffBulkMsg'), btn=$('#staffBulkCreate'), rows=parseStaffBulk($('#staffBulkList').value);
+  if(!rows.length){msg.className='msg err';msg.textContent='فهرست کدها را وارد کنید.';return;}
+  if(rows.some(r=>r.error)){msg.className='msg err';msg.textContent='کد یا نقش نامعتبر است؛ ابتدا خطوط را اصلاح کنید.';renderStaffBulk(rows);return;}
+  if(!confirm(`${faN(rows.length)} حساب پرسنلی ساخته یا به‌روزرسانی شود؟`))return;
+  btn.disabled=true;msg.className='msg';msg.textContent='در حال پردازش…';
+  for(const row of rows){try{await rpc('kpi_provision_employee_account',{p_employee_no:row.employeeNo,p_role:row.role});row.ok=true;}catch(err){row.error=err.message;}}
+  const ok=rows.filter(r=>r.ok).length;
+  msg.className='msg '+(ok===rows.length?'ok':'err');msg.textContent=`${faN(ok)} از ${faN(rows.length)} حساب آماده شد. رمز اولیه برابر کد پرسنلی است؛ آن را فقط به صاحب حساب تحویل دهید.`;
+  renderStaffBulk(rows);btn.disabled=false;loadAccounts();
 }
 async function createAccount(e){
   e.preventDefault();
@@ -789,7 +823,7 @@ async function createAccount(e){
   btn.disabled=true; accMsg('در حال ساخت حساب…');
   try{
     await rpc('kpi_create_account',{p_email:email,p_password:password,p_role:role,p_employee_no:no||null});
-    $('#newAccountForm').reset(); $('#accEmployeeLabel').hidden=false;
+    $('#newAccountForm').reset(); $('#accEmployeeLabel').hidden=true;
     accMsg(`حساب ${email} با نقش «${ROLE_LABEL[role]}» ساخته شد. رمز را به‌صورت خصوصی به فرد بدهید.`);
     loadAccounts();
   }catch(err){ accMsg(err.message,true); }
@@ -822,19 +856,16 @@ async function createAccountsBulk(e){
   loadAccounts();
 }
 function parseBulk(text){
-  const roles={expert:'expert',head:'head',management:'management',admin:'admin',
-    'کارشناس':'expert','رییس':'head','رییس دپارتمان':'head','مدیریت':'management','ادمین':'admin'};
+  const roles={management:'management',admin:'admin','مدیریت':'management','ادمین':'admin'};
   return String(text||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map((line,i)=>{
     const parts=line.split(/[|,;\t]/).map(x=>x.trim());
-    const email=(parts[0]||'').toLowerCase(), employeeNo=asciiDigits(parts[1]||'').replace(/\D/g,'');
-    const roleKey=(parts[2]||'expert').toLowerCase(), role=roles[roleKey]||roles[parts[2]]||null;
-    let password=parts[3]||'';
+    const email=(parts[0]||'').toLowerCase(), roleKey=(parts[1]||'').toLowerCase(), role=roles[roleKey]||roles[parts[1]]||null;
+    const password=parts[2]||'';
     let error=null;
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) error='ایمیل نامعتبر';
-    else if(!role) error='نقش نامعتبر (expert/head/management/admin)';
-    else if(['expert','head'].includes(role)&&!employeeNo) error='کد پرسنلی لازم است';
+    else if(!role) error='نقش باید management یا admin باشد؛ پرسنل را با کد بسازید';
     else if(password&&password.length<8) error='رمز کوتاه‌تر از ۸ کاراکتر';
-    return {line:i+1,email,employeeNo,role,password,error};
+    return {line:i+1,email,employeeNo:'',role,password,error};
   });
 }
 function renderBulkResult(rows){
@@ -983,9 +1014,20 @@ function selectTab(tab){
 async function startApp(){
   resetUi();
   const access=await rpc('kpi_access');
+  if(access?.must_change_password){
+    state.mustChangePassword=true;
+    state.employeeNo=access.employee_no||session.username;
+    $('#authScreen').style.display='none'; $('#appRoot').style.display='block';
+    $('#appRoot').classList.add('force-password');
+    $('#passwordTitle').textContent='برای ادامه، رمز اولیه را عوض کنید';
+    $('#savePassword').textContent='تغییر رمز و ادامه';
+    $('#cancelPassword').hidden=true;
+    $('#passwordMsg').textContent='برای امنیت حساب، پیش از دسترسی به سامانه یک رمز جدیدِ حداقل ۱۲ کاراکتری انتخاب کنید.';
+    $('#passwordDialog').showModal();
+    return;
+  }
   if(!Object.hasOwn(ROLE_TABS,access.role)) throw new Error('برای این حساب هنوز نقشی تعیین نشده است. با ادمین تماس بگیرید.');
-  state.role=access.role; state.employeeId=access.employee_id;
-  document.querySelectorAll('.tab[data-tab]').forEach(b=>b.hidden=!ROLE_TABS[state.role].includes(b.dataset.tab));
+  state.role=access.role; state.employeeId=access.employee_id; state.employeeNo=access.employee_no||null;
   const tabsNav = document.querySelector('nav.tabs');
   if(tabsNav) tabsNav.classList.toggle('single-tab', ROLE_TABS[state.role].length <= 1);
   await loadAll();
@@ -994,7 +1036,12 @@ async function startApp(){
   showApp();
 }
 function resetUi(){
-  Object.assign(state,{role:null,employeeId:null,ready:false,tab:null,demo:false,demoData:null,realFilters:null,demoScope:Symbol(),projectLoad:null,deptScope:null,month:null,dept:'',person:'',logs:[],personnel:[],activities:[],stakeholders:[],projects:[],submissions:[]});
+  Object.assign(state,{role:null,employeeId:null,employeeNo:null,mustChangePassword:false,ready:false,tab:null,demo:false,demoData:null,realFilters:null,demoScope:Symbol(),projectLoad:null,deptScope:null,month:null,dept:'',person:'',logs:[],personnel:[],activities:[],stakeholders:[],projects:[],submissions:[]});
+  $('#appRoot').classList.remove('force-password');
+  $('#cancelPassword').hidden=false;
+  $('#passwordTitle').textContent='تغییر رمز عبور';
+  $('#savePassword').textContent='ذخیره و ورود دوباره';
+  if($('#passwordDialog').open) $('#passwordDialog').close();
   editing=null;reportBusy=false;
   catalogSeq++;catalogRows=[];catalogBusy=false;$('#catKind').disabled=false;$('#catTable').textContent='';catMsg('');
   $('#catForm').reset();$('#catKind').value='personnel';$('#catStatus').value='all';$('#catSearch').value='';setCatalogFields();
@@ -1012,8 +1059,9 @@ function resetUi(){
   $('#roleType').dispatchEvent(new Event('change'));
   $('#newAccountForm')?.reset(); $('#accountsTable').textContent=''; accMsg('');
   $('#bulkForm')?.reset(); $('#bulkResult').textContent=''; $('#bulkMsg').textContent='';
+  $('#staffBulkForm')?.reset(); $('#staffBulkResult').textContent=''; $('#staffBulkMsg').textContent='';
   $('#scopeNote').hidden=true; $('#scopeNote').textContent='';
-  $('#accEmployeeLabel').hidden=false; $('#catHeadNote').hidden=true; $('#catDept').disabled=false;
+  $('#accEmployeeLabel').hidden=true; $('#catHeadNote').hidden=true; $('#catDept').disabled=false;
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -1056,6 +1104,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   $('#newAccountForm').onsubmit=createAccount;
   $('#accRefresh').onclick=loadAccounts;
   $('#bulkForm').onsubmit=createAccountsBulk;
+  $('#staffBulkForm').onsubmit=createStaffAccounts;
   $('#bulkPreview').onclick=()=>{
     const rows=parseBulk($('#bulkList').value), bad=rows.filter(r=>r.error).length;
     $('#bulkMsg').className='msg '+(bad?'err':'ok');
@@ -1064,7 +1113,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   };
   $('#roleForm').onsubmit=async e=>{
     e.preventDefault();
-    const role=$('#roleType').value, email=$('#roleEmail').value.trim(), msg=$('#roleMsg');
+    const role=$('#roleType').value, rawLogin=$('#roleEmail').value.trim(), codeLogin=asciiDigits(rawLogin), email=/^\d+$/.test(codeLogin)?codeLogin:rawLogin, msg=$('#roleMsg');
     if((role==='admin'||role==='none')&&!confirm('نقش انتخاب‌شده برای این حساب اعمال شود؟')) return;
     $('#roleSave').disabled=true; msg.textContent='';
     try{
@@ -1080,19 +1129,29 @@ document.addEventListener('DOMContentLoaded', ()=>{
   };
   $('#cancelPassword').onclick=()=>passwordDialog.close();
   passwordDialog.onclose=()=>$('#passwordForm').reset();
+  passwordDialog.addEventListener('cancel',e=>{ if(state.mustChangePassword) e.preventDefault(); });
   $('#passwordForm').onsubmit=async e=>{
     e.preventDefault();
     const password=$('#newPass').value, msg=$('#passwordMsg'), button=$('#savePassword');
+    if(password.length<12){ msg.textContent='رمز جدید باید حداقل ۱۲ کاراکتر باشد.'; return; }
     if(password!==$('#confirmPass').value){ msg.textContent='رمز جدید و تکرار آن یکسان نیستند.'; return; }
     if(!session || !session.access_token){ passwordDialog.close(); showLogin(); return; }
     button.disabled=true; msg.textContent='';
     try{
       await authFetch('user', {password}, 'PUT', session.access_token);
-      passwordDialog.close();
-      await logout();
-      $('#authMsg').className='msg ok';
-      $('#authMsg').textContent='رمز تغییر کرد. با رمز جدید وارد شوید.';
-    }catch(e){ msg.textContent='تغییر رمز انجام نشد. اگر نشست منقضی شده است، دوباره وارد شوید.'; }
+      if(state.mustChangePassword){
+        await rpc('kpi_finish_first_login');
+        state.mustChangePassword=false;
+        passwordDialog.close();
+        $('#appRoot').classList.remove('force-password');
+        await startApp();
+      }else{
+        passwordDialog.close();
+        await logout();
+        $('#authMsg').className='msg ok';
+        $('#authMsg').textContent='رمز تغییر کرد. با رمز جدید وارد شوید.';
+      }
+    }catch(e){ msg.textContent=state.mustChangePassword?'رمز ذخیره شد اما تکمیل فعال‌سازی انجام نشد؛ دوباره «تغییر رمز و ادامه» را بزنید. '+e.message:'تغییر رمز انجام نشد. اگر نشست منقضی شده است، دوباره وارد شوید.'; }
     finally{ button.disabled=false; }
   };
 
