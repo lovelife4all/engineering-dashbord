@@ -13,7 +13,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css?v=improve4">
+<link rel="stylesheet" href="style.css?v=improve5">
 </head>
 <body data-bg="blueprint">
 
@@ -88,6 +88,8 @@
   <button type="button" class="ghost" id="btnDemo" aria-pressed="false">نمایش داده‌های آزمایشی</button>
   <span id="demoMsg" class="msg err" role="status"></span>
 </section>
+
+<section class="scope-note" id="scopeNote" hidden></section>
 
 <!-- ============ فیلترها ============ -->
 <section class="filters" id="filters">
@@ -214,21 +216,67 @@
 
 <main id="tab-accounts" class="tabpane">
   <section class="card formcard">
-    <h3>تعیین نقش برای حساب موجود</h3>
-    <p class="hint">ابتدا حساب شخص را در بخش Authentication پروژه بسازید. ایجاد حساب به‌تنهایی به داده‌ها دسترسی نمی‌دهد.</p>
+    <h3>ساخت حساب کاربری</h3>
+    <p class="hint">ادمین می‌تواند برای افراد واحدهای مختلف حساب بسازد و همان‌جا نقش و دسترسی بدهد. برای «کارشناس» و «رییس دپارتمان»، ابتدا فرد را در فهرست کارشناسان اضافه کنید و کد پرسنلی فعالش را وارد کنید.</p>
+    <form id="newAccountForm" class="formgrid" autocomplete="off">
+      <label>ایمیل<input type="email" required id="accEmail" placeholder="name@company.ir"></label>
+      <label>رمز عبور اولیه (حداقل ۸ کاراکتر)
+        <div class="drow"><input type="text" required id="accPass" minlength="8" autocomplete="new-password" placeholder="رمز اولیه">
+        <button type="button" class="ghost" id="accPassGen" title="تولید رمز تصادفی">تولید</button></div>
+      </label>
+      <label>نقش
+        <select id="accRole">
+          <option value="expert">کارشناس</option>
+          <option value="head">رییس دپارتمان</option>
+          <option value="management">مدیریت</option>
+          <option value="admin">ادمین</option>
+        </select>
+      </label>
+      <label id="accEmployeeLabel">کد پرسنلی<input type="text" id="accEmployee" inputmode="numeric" placeholder="مثلاً 539190"></label>
+      <div class="actions"><button type="submit" class="primary" id="accCreate">ساخت حساب و تعیین نقش</button></div>
+      <span id="accMsg" class="msg" role="status"></span>
+    </form>
+    <p class="hint">رمز را به‌صورت خصوصی به خود فرد بدهید؛ او می‌تواند از دکمهٔ «تغییر رمز» آن را عوض کند.</p>
+  </section>
+
+  <section class="card formcard">
+    <h3>ساخت گروهی حساب‌ها (لیست واحدها و کارشناسان)</h3>
+    <p class="hint">هر خط یک نفر: <code dir="ltr">email | کد پرسنلی | نقش</code>. نقش اختیاری است و پیش‌فرض «کارشناس» است (مقادیر: expert، head، management، admin). اگر رمز خالی بماند، برای هر نفر یک رمز تصادفی ساخته و در جدول نتیجه نشان داده می‌شود. کد پرسنلی باید از قبل در فهرست کارشناسان با دپارتمان درست ثبت شده باشد.</p>
+    <form id="bulkForm" autocomplete="off">
+      <textarea id="bulkList" rows="6" dir="ltr" placeholder="ali@company.ir | 539190 | expert
+reza@company.ir | 552324 | head"></textarea>
+      <div class="actions">
+        <button type="submit" class="primary" id="bulkCreate">ساخت حساب‌ها</button>
+        <button type="button" class="ghost" id="bulkPreview">پیش‌نمایش و بررسی خطوط</button>
+        <span id="bulkMsg" class="msg" role="status"></span>
+      </div>
+    </form>
+    <div id="bulkResult" class="tblwrap"></div>
+  </section>
+
+  <section class="card formcard">
+    <h3>تعیین یا تغییر نقش حساب موجود</h3>
+    <p class="hint">برای حسابی که از قبل ساخته شده، نقش و دسترسی را از این‌جا تعیین کنید. «لغو دسترسی» حساب را حذف نمی‌کند و فقط نقش را برمی‌دارد.</p>
     <form id="roleForm" class="formgrid" autocomplete="off">
       <label>ایمیل حساب<input type="email" required id="roleEmail"></label>
-      <label>نقش<select id="roleType"><option value="management">مدیریت</option><option value="expert">کارشناس</option><option value="admin">ادمین</option><option value="none">لغو دسترسی</option></select></label>
-      <label id="roleEmployeeLabel" hidden>کد پرسنلی<input type="text" id="roleEmployee"></label>
+      <label>نقش<select id="roleType"><option value="expert">کارشناس</option><option value="head">رییس دپارتمان</option><option value="management">مدیریت</option><option value="admin">ادمین</option><option value="none">لغو دسترسی</option></select></label>
+      <label id="roleEmployeeLabel" hidden>کد پرسنلی<input type="text" id="roleEmployee" inputmode="numeric"></label>
       <div class="actions"><button type="submit" class="primary" id="roleSave">ذخیرهٔ نقش</button></div>
       <span id="roleMsg" class="msg" role="status"></span>
     </form>
+  </section>
+
+  <section class="card">
+    <div class="section-head"><div><h3>حساب‌ها و نقش‌های فعلی</h3><p class="hint">فهرست همهٔ حساب‌های سامانه با نقش، کد پرسنلی و واحد. ساختن حساب فقط از همین صفحه انجام می‌شود.</p></div>
+      <button type="button" class="ghost" id="accRefresh">به‌روزرسانی فهرست</button></div>
+    <div id="accountsTable" class="tblwrap"></div>
   </section>
 </main>
 
 <main id="tab-catalog" class="tabpane">
   <section class="card">
     <h3>مدیریت فهرست‌های پایه</h3>
+    <p class="hint" id="catHeadNote" hidden>دسترسی شما «رییس دپارتمان» است: فقط کارشناسان واحد خودتان در این فهرست دیده می‌شوند و می‌توانید آن‌ها را اضافه یا بایگانی کنید.</p>
     <p class="hint">فهرست‌های موجود حفظ شده‌اند. بایگانی، گزینه را از ثبت جدید حذف می‌کند و سوابق گزارش‌ها را نگه می‌دارد. بایگانی کارشناس دسترسی نقش کارشناسیِ متصل را هم غیرفعال می‌کند.</p>
     <div class="catalog-toolbar">
       <label>فهرست<select id="catKind"><option value="personnel">کارشناسان</option><option value="projects">پروژه‌ها</option><option value="stakeholders">ذینفعان</option></select></label>
@@ -283,7 +331,7 @@
 
 <article id="printReport" class="print-report" dir="rtl" aria-label="گزارش قابل چاپ"></article>
 
-<script src="config.js?v=improve4"></script>
-<script src="app.js?v=improve4"></script>
+<script src="config.js?v=improve5"></script>
+<script src="app.js?v=improve5"></script>
 </body>
 </html>

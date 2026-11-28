@@ -85,12 +85,16 @@ async function api(path, opts={}){
   }
   if(r.status === 401){ clearSession(); showLogin(); resetUi(); throw new Error('لطفاً دوباره وارد شوید'); }
   if(!r.ok){ let t=''; try{t=(await r.json()).message||''}catch(e){}; throw new Error(r.status+' '+t); }
-  const t = await r.text(); return t? JSON.parse(t): null;
+  const t = await r.text();
+  let body=null; try{ body = t? JSON.parse(t): null; }catch(e){ body=t; }
+  // پاسخ RPCهای jsonb به‌صورت رشته/آرایه برمی‌گردد؛ همیشه دادهٔ اصلی را برگردان
+  return Array.isArray(body)&&body.length===1&&body[0]&&typeof body[0]==='object'&&'r' in body[0] ? body[0].r : body;
 }
 
 /* ================= بارگذاری بر اساس نقش ================= */
-const ROLE_LABEL={admin:'ادمین',management:'مدیریت',expert:'کارشناس'};
-const ROLE_TABS={admin:['dash','form','table','accounts','catalog'],management:['dash'],expert:['form']};
+const ROLE_LABEL={admin:'ادمین',management:'مدیریت',head:'رییس دپارتمان',expert:'کارشناس'};
+const ROLE_TABS={admin:['dash','form','table','accounts','catalog'],management:['dash'],
+                 head:['dash','table','catalog'],expert:['form']};
 function rpc(name, payload={}){
   return api('rpc/'+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
 }
@@ -106,7 +110,7 @@ async function allPages(path){
 async function loadAll(){
   const role=state.role, initial=!state.ready,scope=state.demoScope;
   let data;
-  if(role==='management') data=await rpc('kpi_dashboard');
+  if(role==='management'||role==='head') data=await rpc('kpi_dashboard');
   else if(role==='expert') data=await rpc('kpi_expert_form');
   else if(role==='admin') {
     const [logs,personnel,activities,stakeholders,projects,submissions]=await Promise.all([
@@ -121,14 +125,14 @@ async function loadAll(){
   } else throw new Error('برای این حساب هنوز نقشی تعیین نشده است. با ادمین تماس بگیرید.');
   if(role!=='expert') data.projectLoad=await rpc('kpi_project_load',{p_demo:false}).catch(()=>null);
   if(!session || state.role!==role || state.demoScope!==scope) return;
-  const {projectLoad=null,logs,personnel,activities=[],stakeholders=[],projects=[],submissions}=data;
-  Object.assign(state,{logs,personnel,activities,stakeholders,projects,submissions,projectLoad});
+  const {projectLoad=null,logs,personnel,activities=[],stakeholders=[],projects=[],submissions,scope:deptScope=null}=data;
+  Object.assign(state,{logs,personnel,activities,stakeholders,projects,submissions,projectLoad,deptScope});
   const months=[...new Set(logs.map(l=>l.period_year*100+l.period_month))].sort((a,b)=>a-b);
   const now=new Intl.DateTimeFormat('en-US-u-ca-persian',{year:'numeric',month:'numeric'}).formatToParts(new Date());
   const yr=Number(now.find(p=>p.type==='year').value), mo=Number(now.find(p=>p.type==='month').value);
   state.month=months.includes(state.month)?state.month:(months.at(-1)||yr*100+mo);
   if(role!=='expert') fillDashboardFilters();
-  if(role!=='management'){
+  if(role==='admin'||role==='expert'){
     const year=initial?yr:Number($('#eYear').value)||yr, month=initial?mo:Number($('#eMonth').value)||mo;
     const person=role==='expert'?state.employeeId:(initial?'':$('#ePerson').value);
     const years=[...new Set([yr-1,yr,yr+1,year,...months.map(m=>Math.floor(m/100)),...submissions.map(s=>s.period_year)])].sort((a,b)=>a-b);
@@ -163,6 +167,14 @@ function fillDashboardFilters(){
   const depts=[...new Set(personnel.map(p=>p.department.name_fa))].sort();
   fillSelect('#fDept',[{v:'',t:'همه'},...depts.map(d=>({v:d,t:d}))],state.dept);
   fillSelect('#fPerson',[{v:'',t:'همه'},...personnel.map(p=>({v:p.id,t:p.employee_no?`${p.name_en} (${p.employee_no})`:p.name_en}))],state.person);
+}
+function updateScopeNote(){
+  const box=$('#scopeNote'), depts=state.deptScope?.departments;
+  const show=state.role==='head'&&state.tab==='dash'&&Array.isArray(depts)&&depts.length>0;
+  box.hidden=!show;
+  if(show){
+    box.innerHTML=`<strong>نمای واحد شما</strong><p>رییس دپارتمان: فقط آمار واحدهای ${depts.map(d=>`«${esc(d)}»`).join(' و ')} نمایش داده می‌شود. برای دیدن ارقام واحدهای دیگر با ادمین تماس بگیرید.</p>`;
+  }
 }
 function updateDemoUi(){
   const box=$('#dataMode'), btn=$('#btnDemo');
@@ -367,6 +379,7 @@ function bubbles(pts){
 /* ================= رندر داشبورد ================= */
 function render(){
   updateDemoUi();
+  updateScopeNote();
   const data=dashboardData();
   const logs=filtered(true);
   const allMonth=filtered(false);         // برای روند (همه ماه‌ها با فیلتر نفر/دپارتمان)
@@ -471,7 +484,7 @@ function render(){
   printMetrics={hours,events,prevH,prevCount:prev.count,docs,people,mom,submitted,
     eligible:rk.length,subPct,deptData,groups,portfolio,ve:Object.values(veAgg),act:actRows,stk:stkRows};
 
-  if(state.role==='admin'&&!state.demo) renderTable(logs);
+  if(['admin','head'].includes(state.role)&&!state.demo) renderTable(logs);
   if(state.role==='admin') renderMyRows();
 }
 
@@ -540,13 +553,14 @@ function renderPortfolio(p=portfolioForScope()){
 
 let printMetrics=null;
 function printReport(){
-  if(!['admin','management'].includes(state.role)||state.tab!=='dash'||!printMetrics) return;
+  if(!['admin','management','head'].includes(state.role)||state.tab!=='dash'||!printMetrics) return;
   const {hours,events,prevH,prevCount,docs,people,mom,submitted,eligible,subPct,deptData,groups,portfolio,ve,act,stk}=printMetrics;
   const p=$('#printReport');
   const noData=!filtered(true).length;
   const person=state.person?dashboardData().personnel.find(x=>String(x.id)===state.person)?.name_en:null;
   const source=state.demo?(state.month===140506?'شهریور واقعی در نمای آزمایشی؛ مقایسهٔ رشد با مرداد ساختگی است.':'دادهٔ ماه انتخابی ساختگی است؛ برای ارزیابی افراد استفاده نشود.'):'داده‌های واقعی';
   const months=$('#fMonth').selectedOptions[0]?.textContent||'—';
+  const scopeTxt=state.role==='head'&&Array.isArray(state.deptScope?.departments)?` · محدودهٔ واحد: ${state.deptScope.departments.join('، ')}`:'';
   const pairs=[['نفرساعت',faN(hours)],['تعداد فعالیت',faN(events)],
     ['رشد ماهانه',mom===null?'—':`${faN(mom)}٪`],['افراد دارای فعالیت',faN(people)],
     ['مدرک یا موضوع',faN(docs)],['گزارش‌دهی',eligible?`${faN(subPct)}٪`:'—']];
@@ -560,7 +574,7 @@ function printReport(){
   if(leadingStake) summary.push(`ذینفع با بیشترین بار: ${trunc(leadingStake.name,70)}، ${faN(leadingStake.hours)} نفرساعت در ${actLabel(leadingStake.events)}.`);
   if(groups[2].hours>0) summary.push(`${faN(groups[2].hours)} نفرساعت و ${faN(groups[2].events)} فعالیت در گروه «ارزش پایین، تلاش بالا» است؛ برای بازبینی فرایند بررسی شود.`);
   if(!summary.length) summary.push(noData?'در محدودهٔ انتخابی فعالیتی برای تحلیل وجود ندارد.':'بر اساس شاخص‌های این خلاصه، مورد خاصی برای پیگیری علامت نخورده است.');
-  p.innerHTML=`<header><h1>گزارش مدیریتی عملکرد معاونت مهندسی</h1><p class="print-meta">دوره: ${esc(months)} · واحد: ${esc(state.dept||'همه')} · کارشناس: ${esc(person||'همه')}</p><p class="print-meta">نوع داده: ${esc(source)} · تاریخ تهیه: ${esc(new Intl.DateTimeFormat('fa-IR-u-ca-persian').format(new Date()))}</p></header>`+
+  p.innerHTML=`<header><h1>گزارش مدیریتی عملکرد معاونت مهندسی</h1><p class="print-meta">دوره: ${esc(months)} · واحد: ${esc(state.dept||'همه')} · کارشناس: ${esc(person||'همه')}${esc(scopeTxt)}</p><p class="print-meta">نوع داده: ${esc(source)} · تاریخ تهیه: ${esc(new Intl.DateTimeFormat('fa-IR-u-ca-persian').format(new Date()))}</p></header>`+
     (state.demo?'<p class="print-alert">نمای آزمایشی — این گزارش مبنای ارزیابی عملکرد نیست.</p>':'')+
     `<section class="print-kpis">${pairs.map(([k,v])=>`<div><strong>${esc(v)}</strong>${esc(k)}</div>`).join('')}</section>`+
     (prevH?`<p class="print-meta">ماه قبل: ${faN(prevH)} نفرساعت · ${actLabel(prevCount)}</p>`:'')+
@@ -576,8 +590,9 @@ function printReport(){
 function renderTable(logs){
   const rows=logs.slice(0,300);
   if(!rows.length){ $('#tblWrap').innerHTML=emptyBox('رکوردی با این فیلترها یافت نشد'); return; }
+  const readOnly=state.role!=='admin';
   let h=`<table><tr><th>#</th><th>کارشناس</th><th>دپارتمان</th><th>ماه</th><th>منبع</th><th>فعالیت</th>`+
-        `<th>ذینفع</th><th>نفرساعت</th><th>تعداد</th><th>تاریخ نامه</th><th>توضیح کنترل کیفیت</th></tr>`;
+        `<th>ذینفع</th><th>نفرساعت</th><th>تعداد</th>${readOnly?'':'<th>تاریخ نامه</th><th>توضیح کنترل کیفیت</th>'}</tr>`;
   rows.forEach((l,i)=>{
     h+=`<tr><td>${i+1}</td><td>${esc(l.employee? l.employee.name_en:'—')}</td>`+
        `<td>${esc(l.employee? l.employee.department.name_fa:'—')}</td>`+
@@ -586,7 +601,7 @@ function renderTable(logs){
        `<td>${esc(l.activity? (l.activity.specific_title||l.activity.general_fa):'—')}</td>`+
        `<td>${esc(l.stakeholder? l.stakeholder.name_fa:'—')}</td>`+
        `<td><b>${fmt(l.hours)}</b></td><td>${fmt(l.doc_count)}</td>`+
-       `<td class="ltr">${esc(l.letter_date||'—')}</td><td class="quality-note">${esc(l.quality_reason||'—')}</td></tr>`;
+       (readOnly?'':`<td class="ltr">${esc(l.letter_date||'—')}</td><td class="quality-note">${esc(l.quality_reason||'—')}</td>`)+`</tr>`;
   });
   const t=tally(logs);
   h+=`</table><div class="tbl-total"><span>جمع این فیلتر: <b>${faN(t.hours)}</b> نفرساعت · <b>${actLabel(t.count)}</b></span>`+
@@ -739,6 +754,96 @@ function renderMyRows(){
   });
 }
 
+/* ================= حساب‌ها و نقش‌ها (ادمین) ================= */
+function accMsg(text,error=false){ const el=$('#accMsg'); el.className='msg '+(error?'err':'ok'); el.textContent=text; }
+function roleMsgText(text,error=false){ const el=$('#roleMsg'); el.className='msg '+(error?'err':'ok'); el.textContent=text; }
+function randomPassword(len=12){
+  const abc='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+  const buf=new Uint32Array(len); (crypto.getRandomValues?crypto.getRandomValues(buf):buf.fill(0));
+  let out=''; for(const x of buf){ out+=abc[x%abc.length]; }
+  return out;
+}
+async function loadAccounts(){
+  if(state.role!=='admin') return;
+  $('#accountsTable').innerHTML=emptyBox('در حال دریافت حساب‌ها…');
+  try{
+    const rows=await rpc('kpi_accounts');
+    if(state.role!=='admin') return;
+    renderAccounts(rows);
+  }catch(e){ $('#accountsTable').innerHTML=emptyBox('دریافت فهرست حساب‌ها ناموفق بود: '+e.message); }
+}
+function renderAccounts(rows){
+  if(!rows?.length){ $('#accountsTable').innerHTML=emptyBox('حسابی ثبت نشده است.'); return; }
+  const now=faN(new Date().getTime()*0+rows.length);
+  $('#accountsTable').innerHTML=`<p class="hint">${now} حساب</p><table><thead><tr><th>ایمیل</th><th>نقش</th><th>کد پرسنلی</th><th>نام / واحد</th><th>وضعیت</th></tr></thead><tbody>${
+    rows.map(r=>`<tr><td class="ltr" dir="auto">${esc(r.email||'—')}</td><td><span class="catalog-pill${r.role==='none'?' archived':''}">${esc(ROLE_LABEL[r.role]||'بدون نقش')}</span></td><td class="ltr">${esc(r.employee_no||'—')}</td><td dir="auto">${esc([r.name,r.department].filter(Boolean).join(' — ')||'—')}</td><td>${r.active===false?'<span class="catalog-pill archived">کارشناس بایگانی‌شده</span>':'فعال'}</td></tr>`).join('')
+  }</tbody></table>`;
+}
+async function createAccount(e){
+  e.preventDefault();
+  if(state.role!=='admin') return;
+  const btn=$('#accCreate'), email=$('#accEmail').value.trim(), password=$('#accPass').value;
+  const role=$('#accRole').value, no=asciiDigits($('#accEmployee').value).trim();
+  if(password.length<8){ accMsg('رمز عبور باید حداقل ۸ کاراکتر باشد.',true); return; }
+  if((role==='expert'||role==='head')&&!no){ accMsg('برای این نقش، کد پرسنلی فعال لازم است.',true); return; }
+  btn.disabled=true; accMsg('در حال ساخت حساب…');
+  try{
+    await rpc('kpi_create_account',{p_email:email,p_password:password,p_role:role,p_employee_no:no||null});
+    $('#newAccountForm').reset(); $('#accEmployeeLabel').hidden=false;
+    accMsg(`حساب ${email} با نقش «${ROLE_LABEL[role]}» ساخته شد. رمز را به‌صورت خصوصی به فرد بدهید.`);
+    loadAccounts();
+  }catch(err){ accMsg(err.message,true); }
+  finally{ btn.disabled=false; }
+}
+
+async function createAccountsBulk(e){
+  e.preventDefault();
+  if(state.role!=='admin') return;
+  const btn=$('#bulkCreate'), msg=$('#bulkMsg');
+  const parsed=parseBulk($('#bulkList').value);
+  const bad=parsed.filter(r=>r.error);
+  if(!parsed.length){ msg.className='msg err'; msg.textContent='لیستی وارد نشده است.'; return; }
+  if(bad.length){ msg.className='msg err'; msg.textContent=`${faN(bad.length)} خط نامعتبر است؛ ابتدا آن‌ها را اصلاح کنید.`; renderBulkResult(parsed); return; }
+  if(!confirm(`${faN(parsed.length)} حساب ساخته شود؟`)) return;
+  btn.disabled=true; msg.className='msg'; msg.textContent='در حال ساخت حساب‌ها…';
+  const results=[];
+  for(const row of parsed){
+    const password=row.password||randomPassword(12);
+    try{
+      await rpc('kpi_create_account',{p_email:row.email,p_password:password,p_role:row.role,p_employee_no:row.employeeNo||null});
+      results.push({...row,ok:true,password:row.password?null:password});
+    }catch(err){ results.push({...row,ok:false,error:err.message}); }
+  }
+  const ok=results.filter(r=>r.ok).length;
+  msg.className='msg '+(ok===results.length?'ok':'err');
+  msg.textContent=`${faN(ok)} از ${faN(results.length)} حساب ساخته شد. رمزهای ساخته‌شده فقط همین یک‌بار نمایش داده می‌شوند؛ همین حالا ذخیره یا چاپ کنید.`;
+  renderBulkResult(results.map(r=>({...r,error:r.ok?null:r.error})));
+  btn.disabled=false;
+  loadAccounts();
+}
+function parseBulk(text){
+  const roles={expert:'expert',head:'head',management:'management',admin:'admin',
+    'کارشناس':'expert','رییس':'head','رییس دپارتمان':'head','مدیریت':'management','ادمین':'admin'};
+  return String(text||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map((line,i)=>{
+    const parts=line.split(/[|,;\t]/).map(x=>x.trim());
+    const email=(parts[0]||'').toLowerCase(), employeeNo=asciiDigits(parts[1]||'').replace(/\D/g,'');
+    const roleKey=(parts[2]||'expert').toLowerCase(), role=roles[roleKey]||roles[parts[2]]||null;
+    let password=parts[3]||'';
+    let error=null;
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) error='ایمیل نامعتبر';
+    else if(!role) error='نقش نامعتبر (expert/head/management/admin)';
+    else if(['expert','head'].includes(role)&&!employeeNo) error='کد پرسنلی لازم است';
+    else if(password&&password.length<8) error='رمز کوتاه‌تر از ۸ کاراکتر';
+    return {line:i+1,email,employeeNo,role,password,error};
+  });
+}
+function renderBulkResult(rows){
+  if(!rows.length){ $('#bulkResult').innerHTML=emptyBox('خطی برای نمایش نیست.'); return; }
+  $('#bulkResult').innerHTML=`<table><thead><tr><th>#</th><th>ایمیل</th><th>کد پرسنلی</th><th>نقش</th><th>نتیجه</th><th>رمز اولیه</th></tr></thead><tbody>${
+    rows.map(r=>`<tr><td>${r.line}</td><td class="ltr" dir="auto">${esc(r.email||'—')}</td><td class="ltr">${esc(r.employeeNo||'—')}</td><td>${esc(ROLE_LABEL[r.role]||'—')}</td><td>${r.error?`<span class="catalog-pill archived">${esc(r.error)}</span>`:r.ok?'<span class="catalog-pill">ساخته شد</span>':'—'}</td><td class="ltr">${r.ok?(r.password?`<b>${esc(r.password)}</b>`:'—'):'—'}</td></tr>`).join('')
+  }</tbody></table>`;
+}
+
 let catalogRows=[],catalogSeq=0,catalogBusy=false;
 function catMsg(text,error=false){const el=$('#catMsg');el.className='msg '+(error?'err':'ok');el.textContent=text;}
 function setCatalogFields(){
@@ -746,6 +851,13 @@ function setCatalogFields(){
   for(const s of ['#catEmployeeField','#catDeptField']) $(s).hidden=!isPerson;
   for(const s of ['#catContractField','#catStakeField']) $(s).hidden=!isProject;
   $('#catEmployee').required=$('#catDept').required=isPerson;
+  const head=state.role==='head';
+  [...$('#catKind').options].forEach(o=>{ o.hidden=head&&o.value!=='personnel'; });
+  if(head){
+    $('#catKind').value='personnel';
+    $('#catName').placeholder='نام و نام خانوادگی کارشناس';
+    $('#catHeadNote').hidden=false;
+  }
 }
 function renderCatalog(){
   const find=$('#catSearch').value.trim().toLocaleLowerCase('fa'), status=$('#catStatus').value;
@@ -759,8 +871,10 @@ function renderCatalog(){
   });
 }
 async function loadCatalog(){
-  if(state.role!=='admin') return;
+  if(!['admin','head'].includes(state.role)) return;
+  if(state.role==='head') $('#catKind').value='personnel';
   const ticket=++catalogSeq, kind=$('#catKind').value;
+  const role=state.role;
   $('#catAdd').disabled=true;
   $('#catTable').innerHTML=emptyBox('در حال دریافت فهرست…');
   catalogRows=[];setCatalogFields();
@@ -770,28 +884,32 @@ async function loadCatalog(){
       kind==='personnel'?rpc('kpi_catalog',{p_kind:'departments'}):Promise.resolve([]),
       kind==='projects'?rpc('kpi_catalog',{p_kind:'stakeholders'}):Promise.resolve([]),
     ]);
-    if(ticket!==catalogSeq||state.role!=='admin') return;
+    if(ticket!==catalogSeq||state.role!==role) return;
     catalogRows=list;
-    if(kind==='personnel') fillSelect('#catDept',[{v:'',t:'انتخاب دپارتمان'},...deps.filter(x=>x.active).map(x=>({v:x.id,t:x.name}))],'');
+    if(kind==='personnel'){
+      fillSelect('#catDept',[{v:'',t:'انتخاب دپارتمان'},...deps.filter(x=>x.active).map(x=>({v:x.id,t:x.name}))],'');
+      $('#catDept').disabled=role==='head';
+      if(role==='head'&&deps.length===1) $('#catDept').value=String(deps[0].id);
+    }
     if(kind==='projects') fillSelect('#catStake',[{v:'',t:'بدون ذینفع'},...stakes.filter(x=>x.active).map(x=>({v:x.id,t:x.name}))],'');
     renderCatalog();
-  }catch(e){ if(ticket===catalogSeq&&state.role==='admin'){catMsg(e.message,true);$('#catTable').innerHTML=emptyBox('دریافت فهرست ناموفق بود.');} }
+  }catch(e){ if(ticket===catalogSeq&&state.role===role){catMsg(e.message,true);$('#catTable').innerHTML=emptyBox('دریافت فهرست ناموفق بود.');} }
   finally{if(ticket===catalogSeq) $('#catAdd').disabled=catalogBusy;}
 }
 async function changeCatalog(params,success){
-  if(state.role!=='admin'||catalogBusy) return;
-  const scope=state.demoScope;
+  if(!['admin','head'].includes(state.role)||catalogBusy) return;
+  const scope=state.demoScope, role=state.role;
   catalogBusy=true;$('#catKind').disabled=true;$('#catAdd').disabled=true;renderCatalog();catMsg('');
   try{
     await rpc('kpi_catalog',params);
-    if(scope!==state.demoScope||state.role!=='admin')return;
+    if(scope!==state.demoScope||state.role!==role)return;
     if(params.p_action==='add'){
       for(const s of ['#catName','#catEmployee','#catContract','#catDept','#catStake']) $(s).value='';
       $('#catStatus').value='all'; $('#catSearch').value='';
     }
     state.demoData=null;
     await loadCatalog();
-    try{await loadAll(); if(state.role==='admin') render();}
+    try{await loadAll(); if(state.role!=='expert') render();}
     catch(e){catMsg(success+' برای تازه‌کردن فرم‌ها، صفحه را بازخوانی کنید.',true);return;}
     if(scope===state.demoScope) catMsg(success);
   }catch(e){ if(scope===state.demoScope) catMsg(e.message,true); }
@@ -853,12 +971,14 @@ function selectTab(tab){
   document.querySelectorAll('.tab[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
   state.tab=tab;
-  $('#btnPrint').hidden=tab!=='dash';
+  $('#btnPrint').hidden=tab!=='dash'||!['admin','management','head'].includes(state.role);
   if(tab!=='dash') exitDemo();
   updateDemoUi();
+  updateScopeNote();
   $('#filters').style.display=tab==='dash'||tab==='table'?'flex':'none';
   if(tab==='form') renderMyRows();
   if(tab==='catalog') {catMsg('');loadCatalog();}
+  if(tab==='accounts') {accMsg('');loadAccounts();}
 }
 async function startApp(){
   resetUi();
@@ -874,7 +994,7 @@ async function startApp(){
   showApp();
 }
 function resetUi(){
-  Object.assign(state,{role:null,employeeId:null,ready:false,tab:null,demo:false,demoData:null,realFilters:null,demoScope:Symbol(),projectLoad:null,month:null,dept:'',person:'',logs:[],personnel:[],activities:[],stakeholders:[],projects:[],submissions:[]});
+  Object.assign(state,{role:null,employeeId:null,ready:false,tab:null,demo:false,demoData:null,realFilters:null,demoScope:Symbol(),projectLoad:null,deptScope:null,month:null,dept:'',person:'',logs:[],personnel:[],activities:[],stakeholders:[],projects:[],submissions:[]});
   editing=null;reportBusy=false;
   catalogSeq++;catalogRows=[];catalogBusy=false;$('#catKind').disabled=false;$('#catTable').textContent='';catMsg('');
   $('#catForm').reset();$('#catKind').value='personnel';$('#catStatus').value='all';$('#catSearch').value='';setCatalogFields();
@@ -890,6 +1010,10 @@ function resetUi(){
   $('#eSource').value='pargar';
   $('#roleForm').reset();
   $('#roleType').dispatchEvent(new Event('change'));
+  $('#newAccountForm')?.reset(); $('#accountsTable').textContent=''; accMsg('');
+  $('#bulkForm')?.reset(); $('#bulkResult').textContent=''; $('#bulkMsg').textContent='';
+  $('#scopeNote').hidden=true; $('#scopeNote').textContent='';
+  $('#accEmployeeLabel').hidden=false; $('#catHeadNote').hidden=true; $('#catDept').disabled=false;
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -920,8 +1044,23 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if(confirm('گزارش به پیش‌نویس برگردد تا قابل اصلاح باشد؟')) runReport('reopen',{},'گزارش برای اصلاح باز شد.');
   };
   $('#roleType').onchange=()=>{
-    const expert=$('#roleType').value==='expert';
-    $('#roleEmployeeLabel').hidden=!expert; $('#roleEmployee').required=expert;
+    const needsEmployee=['expert','head'].includes($('#roleType').value);
+    $('#roleEmployeeLabel').hidden=!needsEmployee; $('#roleEmployee').required=needsEmployee;
+  };
+  const accRoleChange=()=>{
+    const needsEmployee=['expert','head'].includes($('#accRole').value);
+    $('#accEmployeeLabel').hidden=!needsEmployee; $('#accEmployee').required=needsEmployee;
+  };
+  $('#accRole').onchange=accRoleChange; accRoleChange();
+  $('#accPassGen').onclick=()=>{ $('#accPass').value=randomPassword(12); accMsg('رمز پیشنهادی ساخته شد؛ قبل از دادن به فرد، ذخیره‌اش کنید.'); };
+  $('#newAccountForm').onsubmit=createAccount;
+  $('#accRefresh').onclick=loadAccounts;
+  $('#bulkForm').onsubmit=createAccountsBulk;
+  $('#bulkPreview').onclick=()=>{
+    const rows=parseBulk($('#bulkList').value), bad=rows.filter(r=>r.error).length;
+    $('#bulkMsg').className='msg '+(bad?'err':'ok');
+    $('#bulkMsg').textContent=rows.length?`${faN(rows.length)} خط، ${faN(bad)} خط نامعتبر.`:'لیستی وارد نشده است.';
+    renderBulkResult(rows.map(r=>({...r,error:r.error})));
   };
   $('#roleForm').onsubmit=async e=>{
     e.preventDefault();
@@ -929,7 +1068,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if((role==='admin'||role==='none')&&!confirm('نقش انتخاب‌شده برای این حساب اعمال شود؟')) return;
     $('#roleSave').disabled=true; msg.textContent='';
     try{
-      await rpc('kpi_set_role',{p_email:email,p_role:role,p_employee_no:role==='expert'?asciiDigits($('#roleEmployee').value).trim():null});
+      await rpc('kpi_set_role',{p_email:email,p_role:role,p_employee_no:['expert','head'].includes(role)?asciiDigits($('#roleEmployee').value).trim():null});
       msg.className='msg ok'; msg.textContent=role==='none'?'دسترسی حساب لغو شد.':'نقش حساب ذخیره شد.';
     }catch(e){ msg.className='msg err'; msg.textContent=e.message; }
     finally{ $('#roleSave').disabled=false; }

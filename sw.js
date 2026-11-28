@@ -1,13 +1,13 @@
 /* Service Worker — داشبورد عملکرد معاونت مهندسی */
 'use strict';
 
-const CACHE_NAME = 'engkpi-shell-v4';
+const CACHE_NAME = 'engkpi-shell-v5';
 const SHELL_ASSETS = [
   './',
   './index.html',
-  './style.css?v=improve4',
-  './app.js?v=improve4',
-  './config.js?v=improve4',
+  './style.css?v=improve5',
+  './app.js?v=improve5',
+  './config.js?v=improve5',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
