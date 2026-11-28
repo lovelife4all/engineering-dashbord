@@ -1,0 +1,136 @@
+/* Visual identity for the engineering dashboard */
+@media screen {
+  :root {
+    --bg: #edf3f2;
+    --card: #fff;
+    --ink: #142e34;
+    --ink-soft: #25444b;
+    --muted: #4d6267;
+    --muted-light: #52686d;
+    --brand: #087269;
+    --brand-dark: #11534f;
+    --brand2: #258e7e;
+    --line: #dce7e6;
+    --line-strong: #bdcfcd;
+    --shadow: 0 2px 5px #122f3410, 0 9px 26px #122f340b;
+    --shadow-hover: 0 5px 15px #122f3414, 0 13px 32px #122f3411;
+    --site-gutter: clamp(14px, 3.3vw, 50px);
+    --station-image: url("./assets/gas-compressor-station.webp");
+  }
+  body[data-bg] {
+    background: radial-gradient(ellipse at 85% 0%, #daeae6, transparent 48rem), var(--bg);
+  }
+  body[data-bg="energy"] {
+    background-image: linear-gradient(#1758580a 1px, transparent 1px),
+      linear-gradient(90deg, #1758580a 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .topbar {
+    padding-inline: var(--site-gutter);
+    background: linear-gradient(100deg, #102931, #123b41);
+    border-bottom: 2px solid #2d867a;
+    box-shadow: 0 5px 18px #142e3429;
+  }
+  .brand .logo, .auth-logo {
+    background: #143e43;
+    color: #a2ecda;
+    border: 1px solid #56958d;
+    box-shadow: none;
+  }
+  .topbar .sub { color: #bccecf; }
+  .topbar .tab.active { color: #104d45; background: #d8f4ec; }
+  .bg-pill.active { color: #104d45; background: #d8f4ec; }
+  .tabpane { padding-inline: var(--site-gutter); }
+  .filters, #dataMode, .scope-note { margin-inline: var(--site-gutter); }
+  .card, .filters, .data-mode { backdrop-filter: none; }
+  .card h3 { color: #173c45; font-weight: 800; }
+  button.primary {
+    background: linear-gradient(135deg, #087269, #095851);
+    box-shadow: 0 3px 10px #09585130;
+  }
+  button.ghost { border-color: #a4c9c3; }
+  button.ghost:hover { background: #e9f6f2; }
+  :is(button, select, input, textarea, summary):focus-visible {
+    outline: 2px solid #b96609;
+    outline-offset: 2px;
+  }
+  th { color: #30565a; background: #edf5f3; }
+  tbody tr:nth-child(even) td { background: #f8fbfa; }
+  tbody tr:hover td { background: #edf7f4; }
+  .management-overview { grid-template-columns: minmax(0, 1fr); gap: clamp(12px, 1.6vw, 24px); }
+  .management-overview > .card { min-width: 0; }
+  .management-header { padding: 0; overflow: hidden; }
+  .management-hero {
+    align-items: flex-end;
+    min-height: 226px;
+    padding: clamp(20px, 3.4vw, 48px);
+    color: #f8fffc;
+    background-color: #153a41;
+    background-image: linear-gradient(270deg, #0f2b33 8%, #102f37d9 43%, #102f3738 100%), var(--station-image);
+    background-position: center, left 52%;
+    background-size: cover;
+    border-bottom: 3px solid #75b9a5;
+  }
+  body[data-bg="energy"] .management-hero {
+    background-image: linear-gradient(270deg, #0f2b33 8%, #102f37e8 48%, #102f3760 100%),
+      repeating-linear-gradient(90deg, transparent 0 39px, #a2edda35 39px 40px),
+      repeating-linear-gradient(0deg, transparent 0 39px, #a2edda35 39px 40px), var(--station-image);
+  }
+  .management-org { color: #a4dfd1; font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .management-hero h2 { color: #fff; font-size: clamp(25px, 3vw, 42px); line-height: 1.35; }
+  .management-hero .hint { color: #d5e7e7; margin-top: 8px; }
+  #managementCoverage {
+    color: #f4fffc;
+    background: #0b3e43;
+    border: 1px solid #77aa9c;
+    padding: 6px 12px;
+  }
+  .management-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: clamp(9px, 1.4vw, 20px);
+    margin: 0;
+    padding: clamp(12px, 1.8vw, 26px);
+    background: #fcfefe;
+  }
+  .kpi { border-color: #dae8e5; background: linear-gradient(135deg, #fff, #f4faf8); }
+  .kpi-v { color: #17554f; }
+  .kpi::before, .management-kpis .kpi::before { background: #289082; }
+  .management-kpis .kpi:nth-child(2)::before { background: #527e8c; }
+  .management-kpis .kpi:nth-child(3)::before { background: #826437; }
+  .management-kpis .kpi:nth-child(4)::before { background: #3f8060; }
+  .management-followups { border-inline-start: 3px solid #c58232; }
+  .management-unit-panel { border-inline-start: 3px solid #289082; }
+  .management-trend-panel { border-inline-start: 3px solid #527e8c; }
+  .management-trend rect[fill="#1d5bd8"] { fill: #138277; }
+  .management-trend rect[fill="#ac5d06"] { fill: #ad7228; }
+  .management-overview .tblwrap > .hint { padding: 8px 12px; }
+  .portfolio-summary span { color: #184e48; background: #eef7f4; border-color: #d6e9e3; }
+  body[data-bg] .auth-screen {
+    background-color: #0d2930;
+    background-image: linear-gradient(270deg, #0e2c35f2 4%, #102d36a6 51%, #122d3440), var(--station-image);
+    background-size: cover;
+    background-position: center, 27% 50%;
+    align-items: flex-start;
+    padding-inline: clamp(24px, 9vw, 180px);
+    justify-content: safe center;
+  }
+  body[data-bg="energy"] .auth-screen {
+    background-image: linear-gradient(270deg, #112f37f5 4%, #102d36bb 52%, #102d3650),
+      repeating-linear-gradient(90deg, transparent 0 39px, #a2edda35 39px 40px),
+      repeating-linear-gradient(0deg, transparent 0 39px, #a2edda35 39px 40px), var(--station-image);
+  }
+  .auth-screen > .auth-card {
+    border: 1px solid #b4d9d0;
+    border-top: 3px solid #2f8b7e;
+    box-shadow: 0 18px 60px #08232960;
+    margin-block: 0;
+  }
+  .auth-screen .auth-card h2 { font-size: clamp(18px, 2.3vw, 24px); line-height: 1.5; }
+  .auth-bg-switcher { align-self: flex-start; }
+  @media (max-width: 768px) {
+    .management-hero { min-height: 190px; background-position: center, 24% center; }
+    .management-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    body[data-bg] .auth-screen { align-items: center; padding-inline: 14px; background-position: center, 25% center; }
+    .auth-bg-switcher { align-self: center; }
+  }
+}

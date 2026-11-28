@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f274a">
+<meta name="theme-color" content="#102f37">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,17 +13,18 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css?v=management8">
-<link rel="stylesheet" href="management.css?v=management8">
+<link rel="stylesheet" href="style.css?v=industry9">
+<link rel="stylesheet" href="management.css?v=industry9">
+<link rel="stylesheet" href="industry.css?v=industry9">
 </head>
 <body data-bg="blueprint">
 
 <!-- ============ صفحه ورود ============ -->
 <div class="auth-screen" id="authScreen">
   <div class="bg-switcher auth-bg-switcher" role="group" aria-label="انتخاب طرح پس‌زمینه">
-    <span class="bg-switcher-lbl">طرح پس‌زمینه:</span>
-    <button type="button" class="bg-pill active" data-bg-choice="blueprint" aria-pressed="true">طرح ۱: نقشه فنی و خطوط انتقال</button>
-    <button type="button" class="bg-pill" data-bg-choice="energy" aria-pressed="false">طرح ۲: شعله آبی و انرژی مدرن</button>
+    <span class="bg-switcher-lbl">نمای پس‌زمینه</span>
+    <button type="button" class="bg-pill active" data-bg-choice="blueprint" aria-pressed="true">ایستگاه گاز</button>
+    <button type="button" class="bg-pill" data-bg-choice="energy" aria-pressed="false">نقشهٔ فنی</button>
   </div>
   <div class="auth-card">
     <div class="auth-logo" aria-hidden="true">
@@ -53,17 +54,17 @@
     </div>
   </div>
   <nav class="tabs">
-    <button class="tab active" data-tab="dash">📈 داشبورد</button>
+    <button class="tab active" data-tab="dash">داشبورد</button>
     <button class="tab" data-tab="scores">امتیازدهی فعالیت‌ها</button>
-    <button class="tab" data-tab="form">📝 فرم ورود ماهانه</button>
-    <button class="tab" data-tab="table">🗂 جدول داده‌ها</button>
+    <button class="tab" data-tab="form">فرم ورود ماهانه</button>
+    <button class="tab" data-tab="table">جدول داده‌ها</button>
     <button class="tab" data-tab="accounts">حساب‌ها و نقش‌ها</button>
     <button class="tab" data-tab="catalog">فهرست‌های پایه</button>
   </nav>
   <div class="who">
     <div class="bg-switcher top-bg-switcher" role="group" aria-label="انتخاب طرح پس‌زمینه">
-      <button type="button" class="bg-pill active" data-bg-choice="blueprint" aria-pressed="true" title="پس‌زمینه نقشه فنی و خطوط انتقال">طرح ۱: نقشه فنی</button>
-      <button type="button" class="bg-pill" data-bg-choice="energy" aria-pressed="false" title="پس‌زمینه شعله آبی و انرژی مدرن">طرح ۲: انرژی آبی</button>
+      <button type="button" class="bg-pill active" data-bg-choice="blueprint" aria-pressed="true" title="نمای ایستگاه گاز">ایستگاه گاز</button>
+      <button type="button" class="bg-pill" data-bg-choice="energy" aria-pressed="false" title="نمای نقشهٔ فنی">نقشهٔ فنی</button>
     </div>
     <span id="whoami" class="whoami"></span>
     <button class="tab install-btn" type="button" id="btnInstall" hidden>📲 نصب برنامه</button>
@@ -113,14 +114,14 @@
 
   <section class="management-overview" id="managementOverview" hidden>
     <div class="card management-header">
-      <div class="section-head"><div><h2>خلاصهٔ ماه مدیریت</h2><p class="hint" id="managementPeriod"></p></div>
+      <div class="section-head management-hero"><div><p class="management-org">شرکت مهندسی و توسعه گاز ایران</p><h2>خلاصهٔ ماه مدیریت</h2><p class="hint" id="managementPeriod"></p></div>
         <span class="catalog-pill" id="managementCoverage"></span>
       </div>
       <div class="management-kpis" id="managementKpis"></div>
     </div>
-    <div class="card"><h3>موارد نیازمند پیگیری</h3><div class="tblwrap" id="managementActions"></div></div>
-    <div class="card"><h3>مقایسهٔ واحدها</h3><div class="tblwrap" id="managementUnits"></div></div>
-    <div class="card"><h3>روند ۱۲ ماهه تا دورهٔ انتخابی</h3>
+    <div class="card management-followups"><h3>موارد نیازمند پیگیری</h3><div class="tblwrap" id="managementActions"></div></div>
+    <div class="card management-unit-panel"><h3>مقایسهٔ واحدها</h3><div class="tblwrap" id="managementUnits"></div></div>
+    <div class="card management-trend-panel"><h3>روند ۱۲ ماهه تا دورهٔ انتخابی</h3>
       <div class="management-trend" id="managementTrend"></div>
       <p class="hint">وضعیت هر ماه بر اساس گزارش‌های نهایی و فهرست فعلی پرسنل است.</p>
     </div>
@@ -378,7 +379,7 @@ admin2@company.ir | admin | رمزاختیاری"></textarea>
 
 <article id="printReport" class="print-report" dir="rtl" aria-label="گزارش قابل چاپ"></article>
 
-<script src="config.js?v=management8"></script>
-<script src="app.js?v=management8"></script>
+<script src="config.js?v=industry9"></script>
+<script src="app.js?v=industry9"></script>
 </body>
 </html>
