@@ -223,18 +223,20 @@ function roster(){ // تعداد افراد فعال (با اعمال فیلتر
 /* ================= نمودارهای خوانا (HTML + SVG سفارشی) ================= */
 function emptyBox(msg){ return `<div class="empty">${esc(msg)}</div>`; }
 
-/* نوار افقی RTL — اعداد همیشه در جلو (بیرونِ سرِ) میله */
+/* نوار افقی RTL — اعداد همیشه در جلو (بیرونِ سرِ) میله؛ تعداد فعالیت در کنار نفرساعت */
 function hbar(data, opt={}){
   if(!data.length) return emptyBox('داده‌ای برای نمایش نیست');
   const max=Math.max(...data.map(d=>Number(d.v)||0),1);
   const labelW=opt.labelW||200;
   const unit=opt.unit||'';
-  let s=`<div class="hbar-list" style="--hbar-label-w:${labelW}px">`;
+  const withCount=opt.count!==false&&data.some(d=>d.n!=null);
+  let s=`<div class="hbar-list${withCount?' has-count':''}" style="--hbar-label-w:${labelW}px">`;
   data.forEach((d,i)=>{
     const val=Math.max(0, Number(d.v)||0);
     const ratio=max>0 ? Math.min(1, val/max) : 0;
     const c=d.c||COLORS[i%COLORS.length];
-    const titleTxt=d.sub ? `${d.t} — ${d.sub}: ${fmt(val)}${unit}` : `${d.t}: ${fmt(val)}${unit}`;
+    const cnt=d.n==null?null:Number(d.n)||0;
+    const titleTxt=(d.sub ? `${d.t} — ${d.sub}: ` : `${d.t}: `)+`${fmt(val)}${unit}${cnt!=null?' · '+actLabel(cnt):''}`;
     const barStyle=val>0
       ? `width:calc((100% - var(--hbar-val-reserve, 104px)) * ${ratio.toFixed(4)});min-width:6px;background:${c}`
       : `width:0;min-width:0;background:${c}`;
@@ -246,6 +248,7 @@ function hbar(data, opt={}){
          `<div class="hbar-track">`+
            `<div class="hbar-fill" style="${barStyle}"></div>`+
            `<span class="hbar-val">${fmt(val)}${esc(unit)}</span>`+
+           (cnt!=null ? `<span class="hbar-count">${actLabel(cnt)}</span>` : '')+
          `</div>`+
        `</div>`;
   });
@@ -253,10 +256,11 @@ function hbar(data, opt={}){
 }
 function trunc(s,n){ s=String(s??''); return s.length>n? s.slice(0,n-1)+'…':s; }
 
-/* نوار عمودی (روند ماهانه) */
+/* نوار عمودی (روند ماهانه) — با تعداد فعالیت زیر هر ماه */
 function vbar(data, opt={}){
   if(!data.length) return emptyBox('داده‌ای برای نمایش نیست');
-  const W=opt.w||560, H=248, padL=50, padR=14, padT=28, padB=46;
+  const hasCount=data.some(d=>d.n!=null);
+  const W=opt.w||560, H=hasCount?266:248, padL=60, padR=14, padT=30, padB=hasCount?64:46;
   const max=Math.max(...data.map(d=>d.v),1);
   const bw=Math.min(58,(W-padL-padR)/data.length-14);
   let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="direction:ltr">`;
@@ -265,14 +269,17 @@ function vbar(data, opt={}){
     s+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e2e8f0" stroke-dasharray="${g===4?'':'3 3'}"/>`;
     s+=`<text x="${padL-8}" y="${y+4}" text-anchor="end" font-size="10.5" fill="#475569">${fmt(val)}</text>`;
   }
+  s+=`<text x="${padL}" y="12" text-anchor="start" font-size="10.5" fill="#64748b">نفرساعت</text>`;
+  if(hasCount) s+=`<text x="${W-padR}" y="12" text-anchor="end" direction="rtl" font-size="10.5" fill="#64748b">تعداد فعالیت زیر هر ستون</text>`;
   const step=(W-padL-padR)/data.length;
   data.forEach((d,i)=>{
     const h=(H-padT-padB)*d.v/max, x=padL+step*i+(step-bw)/2, y=H-padB-h;
-    s+=`<g><title>${esc(d.t)}${d.t2?' '+esc(d.t2):''}: ${fmt(d.v)}</title>`;
+    s+=`<g><title>${esc(d.t)}${d.t2?' '+esc(d.t2):''}: ${fmt(d.v)} نفرساعت${d.n!=null?' · '+fmt(d.n)+' فعالیت':''}</title>`;
     s+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(h,2)}" rx="6" fill="${d.c||'#1d5bd8'}"/>`;
     s+=`<text x="${x+bw/2}" y="${y-7}" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">${fmt(d.v)}</text>`;
     s+=`<text x="${x+bw/2}" y="${H-padB+17}" text-anchor="middle" direction="rtl" font-size="11.5" font-weight="700" fill="#334155">${esc(d.t)}</text>`;
-    if(d.t2) s+=`<text x="${x+bw/2}" y="${H-padB+33}" text-anchor="middle" direction="rtl" font-size="10" fill="#64748b">${esc(d.t2)}</text>`;
+    if(d.t2) s+=`<text x="${x+bw/2}" y="${H-padB+32}" text-anchor="middle" direction="rtl" font-size="10" fill="#64748b">${esc(d.t2)}</text>`;
+    if(d.n!=null) s+=`<text x="${x+bw/2}" y="${H-8}" text-anchor="middle" direction="rtl" font-size="10.5" font-weight="700" fill="#1d5bd8">${fmt(d.n)} فعالیت</text>`;
     s+=`</g>`;
   });
   return s+'</svg>';
@@ -293,13 +300,13 @@ function donut(data, opt={}){
     const frac=d.v/total;
     if(frac>=0.9999 || nonZero.length===1){
       const rm=(r+ir)/2;
-      svg+=`<circle cx="${cx}" cy="${cy}" r="${rm}" fill="none" stroke="${c}" stroke-width="${r-ir}"/>`;
+      svg+=`<circle cx="${cx}" cy="${cy}" r="${rm}" fill="none" stroke="${c}" stroke-width="${r-ir}"><title>${esc(d.t)}: ${fmt(d.v)} · ${actLabel(d.n||0)}</title></circle>`;
     } else {
       const a1=a0+frac*Math.PI*2;
       const large=(a1-a0)>Math.PI?1:0;
       const p=(ang,rad)=>[cx+rad*Math.cos(ang), cy+rad*Math.sin(ang)];
       const [x0,y0]=p(a0,r),[x1,y1]=p(a1,r),[x2,y2]=p(a1,ir),[x3,y3]=p(a0,ir);
-      svg+=`<path d="M${x0} ${y0} A${r} ${r} 0 ${large} 1 ${x1} ${y1} L${x2} ${y2} A${ir} ${ir} 0 ${large} 0 ${x3} ${y3} Z" fill="${c}" stroke="#ffffff" stroke-width="2"/>`;
+      svg+=`<path d="M${x0} ${y0} A${r} ${r} 0 ${large} 1 ${x1} ${y1} L${x2} ${y2} A${ir} ${ir} 0 ${large} 0 ${x3} ${y3} Z" fill="${c}" stroke="#ffffff" stroke-width="2"><title>${esc(d.t)}: ${fmt(d.v)} · ${actLabel(d.n||0)}</title></path>`;
       a0=a1;
     }
   });
@@ -317,7 +324,9 @@ function donut(data, opt={}){
     const unit=opt.unit||'';
     legend+=`<div class="donut-item">`+
       `<span class="donut-item-lbl"><span class="donut-dot" style="background:${c}"></span><span class="donut-name">${esc(d.t)}</span></span>`+
-      `<span class="donut-meta"><b>${fmt(d.v)}${esc(unit)}</b> (${pct}%)</span>`+
+      `<span class="donut-meta"><b>${fmt(d.v)}${esc(unit)}</b> (${pct}%)`+
+        (d.n!=null?`<small class="donut-count">${actLabel(d.n)}</small>`:'')+
+      `</span>`+
     `</div>`;
   });
   legend+='</div>';
@@ -344,7 +353,7 @@ function bubbles(pts){
   pts.forEach((p,i)=>{
     const rad=8+22*Math.sqrt(p.h/maxH);
     const col=COLORS[i%COLORS.length];
-    s+=`<g><title>${esc(p.t)}: ${fmt(p.h)} ساعت (ارزش ${p.x} · تلاش ${p.y})</title>`;
+    s+=`<g><title>${esc(p.t)}: ${fmt(p.h)} ساعت · ${actLabel(p.n||0)} (ارزش ${p.x} · تلاش ${p.y})</title>`;
     s+=`<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="${rad}" fill="${col}" fill-opacity=".68" stroke="#ffffff" stroke-width="1.5"/>`;
     s+=`<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="${rad}" fill="none" stroke="${col}" stroke-width="1.2"/>`;
     if(p.h>=maxH*0.08) s+=`<text x="${X(p.x)}" y="${Y(p.y)+3.5}" text-anchor="middle" font-size="9.5" fill="#fff" font-weight="700" style="text-shadow:0 1px 2px rgba(15,23,42,.55)">${fmt(p.h)}</text>`;
@@ -364,12 +373,13 @@ function render(){
   const y=Math.floor(state.month/100), m=state.month%100;
 
   // ---- KPI ----
-  const hours=logs.reduce((a,l)=>a+Number(l.hours),0);
+  const {hours,count:events}=tally(logs);
   const docs=logs.reduce((a,l)=>a+Number(l.doc_count),0);
   const people=new Set(logs.map(l=>l.employee&&l.employee.id)).size;
   // ماه قبل
   let py=y, pm=m-1; if(pm<1){pm=12;py=y-1;}
-  const prevH=allMonth.filter(l=>l.period_year===py&&l.period_month===pm).reduce((a,l)=>a+Number(l.hours),0);
+  const prev=tally(allMonth.filter(l=>l.period_year===py&&l.period_month===pm));
+  const prevH=prev.hours;
   const mom=prevH? (hours-prevH)/prevH*100 : null;
   const rk=roster();
   const eligible=new Set(rk.map(p=>p.id));
@@ -378,22 +388,23 @@ function render(){
   const subPct=rk.length? Math.round(subm.length/rk.length*100):0;
 
   $('#kpiHours').textContent=fmt(hours);
-  $('#kpiHoursD').innerHTML= prevH? `<span class="${mom>=0?'up':'down'}">${mom>=0?'▲':'▼'} ${fmt(Math.abs(mom))}%</span> <span style="color:var(--muted)">ماه قبل: ${fmt(prevH)}</span>` : '<span style="color:var(--muted)">ماه قبل: —</span>';
+  $('#kpiHoursC').textContent=actLabel(events);
+  $('#kpiHoursD').innerHTML= prevH? `<span class="${mom>=0?'up':'down'}">${mom>=0?'▲':'▼'} ${fmt(Math.abs(mom))}%</span> <span style="color:var(--muted)">ماه قبل: ${fmt(prevH)} نفرساعت · ${actLabel(prev.count)}</span>` : '<span style="color:var(--muted)">ماه قبل: —</span>';
   $('#kpiMom').textContent= mom===null? '—' : (mom>=0?'+':'')+fmt(mom)+'%';
   $('#kpiMom').style.color= mom===null? '' : (mom>=0?'#059669':'#dc2626');
-  $('#kpiMomD').textContent= mom===null? 'ماه قبل داده‌ای ندارد' : `${FA_MONTHS[pm-1]} ${py}${state.demo?' ('+demoPeriodLabel(py*100+pm)+')':''}: ${fmt(prevH)} نفرساعت`;
+  $('#kpiMomD').textContent= mom===null? 'ماه قبل داده‌ای ندارد' : `${FA_MONTHS[pm-1]} ${py}${state.demo?' ('+demoPeriodLabel(py*100+pm)+')':''}: ${fmt(prevH)} نفرساعت · ${actLabel(prev.count)}`;
   $('#kpiPeople').textContent=fmt(people);
-  $('#kpiPeopleD').textContent=`از ${rk.length} نفر کل دپارتمان(ها)`;
+  $('#kpiPeopleD').textContent=`از ${rk.length} نفر کل دپارتمان(ها) · ${actLabel(events)} در این ماه`;
   $('#kpiDocs').textContent=fmt(docs);
-  $('#kpiDocsD').textContent=`میانگین ${people? fmt(hours/people):'—'} ساعت به ازای هر نفر فعال`;
+  $('#kpiDocsD').textContent=`میانگین ${people? fmt(hours/people):'—'} ساعت به ازای هر نفر فعال · ${fmt(events?hours/events:0)} ساعت/فعالیت`;
   $('#kpiSub').textContent=subPct+'%';
   $('#kpiSubD').textContent=`${subm.length} از ${rk.length} نفر گزارش داده‌اند`;
 
   // ---- روند ماهانه ----
   const byM={};
-  allMonth.forEach(l=>{const k=l.period_year*100+l.period_month; byM[k]=(byM[k]||0)+Number(l.hours)});
+  allMonth.forEach(l=>{const k=l.period_year*100+l.period_month; if(!byM[k]) byM[k]={hours:0,count:0}; byM[k].hours+=Number(l.hours)||0; byM[k].count+=countOf(l);});
   const trend=(state.demo?DEMO_MONTHS:Object.keys(byM).sort().map(Number)).map(k=>({t:FA_MONTHS[k%100-1], t2:state.demo?demoPeriodLabel(k):Math.floor(k/100),
-    v:byM[k]||0, c:state.demo&&k!==140506?(k===state.month?'#ac5d06':'#cf8b35'):(k===state.month||state.demo?'#1d5bd8':'#9db8ec')}));
+    v:(byM[k]||{}).hours||0, n:(byM[k]||{}).count||0, c:state.demo&&k!==140506?(k===state.month?'#ac5d06':'#cf8b35'):(k===state.month||state.demo?'#1d5bd8':'#9db8ec')}));
   $('#chTrend').innerHTML=vbar(trend);
 
   // ---- گزارش‌دهی ----
@@ -407,47 +418,58 @@ function render(){
   const deptAgg={};
   logs.forEach(l=>{
     const d=l.employee? l.employee.department.name_fa:'—';
-    deptAgg[d]=(deptAgg[d]||0)+Number(l.hours);
+    if(!deptAgg[d]) deptAgg[d]={hours:0,count:0};
+    deptAgg[d].hours+=Number(l.hours)||0; deptAgg[d].count+=countOf(l);
   });
-  const deptData=Object.entries(deptAgg).sort((a,b)=>b[1]-a[1]).map(([d,h])=>{
+  const deptData=Object.entries(deptAgg).sort((a,b)=>b[1].hours-a[1].hours).map(([d,a])=>{
     const head=data.personnel.filter(p=>p.active&&p.department.name_fa===d).length;
-    return {t:d, v:h, sub:`ظرفیت ${fmt(head*180)} ساعت · ${head} نفر`};
+    return {t:d, v:a.hours, n:a.count, sub:`${faN(percent(a.hours,hours))}٪ از کل · ظرفیت ${fmt(head*180)} ساعت · ${head} نفر`};
   });
-  $('#chDept').innerHTML=hbar(deptData,{unit:' ساعت', labelW:210, rowH:34});
+  $('#chDept').innerHTML=hbar(deptData,{unit:' ساعت', labelW:240, rowH:38});
 
   // ---- Value-Effort ----
   const veAgg={};
   logs.forEach(l=>{ if(!l.activity) return;
     const k=l.activity.general_fa+'||'+(l.activity.specific_title||'');
     if(!veAgg[k]) veAgg[k]={x:Number(l.activity.value_score), y:Number(l.activity.effort_score),
-      h:0, t:l.activity.specific_title||l.activity.general_fa};
-    veAgg[k].h+=Number(l.hours);
+      h:0, n:0, t:l.activity.specific_title||l.activity.general_fa};
+    veAgg[k].h+=Number(l.hours); veAgg[k].n+=countOf(l);
   });
   $('#chVE').innerHTML=bubbles(Object.values(veAgg));
   const groups=renderPriorities(Object.values(veAgg),hours);
   const portfolio=portfolioForScope(); renderPortfolio(portfolio);
-  printMetrics={hours,docs,people,mom,submitted,eligible:rk.length,subPct,deptData,groups,portfolio};
 
   // ---- فعالیت‌ها ----
   const actAgg={};
   logs.forEach(l=>{ if(!l.activity) return;
     const k=(l.activity.specific_title||l.activity.general_fa);
-    actAgg[k]=(actAgg[k]||0)+Number(l.hours);
+    if(!actAgg[k]) actAgg[k]={hours:0,count:0};
+    actAgg[k].hours+=Number(l.hours)||0; actAgg[k].count+=countOf(l);
   });
-  $('#chAct').innerHTML=hbar(Object.entries(actAgg).sort((a,b)=>b[1]-a[1]).slice(0,12)
-    .map(([t,v])=>({t,v})), {unit:' ساعت', rowH:30});
+  const actRows=Object.entries(actAgg).sort((a,b)=>b[1].hours-a[1].hours).slice(0,12)
+    .map(([t,a])=>({t,v:a.hours,n:a.count}));
+  $('#chAct').innerHTML=hbar(actRows, {unit:' ساعت', rowH:34});
 
   // ---- ذینفعان ----
   const stkAgg={};
-  logs.forEach(l=>{ const k=l.stakeholder? l.stakeholder.name_fa:'(بدون ذینفع)'; stkAgg[k]=(stkAgg[k]||0)+Number(l.hours); });
-  $('#chStk').innerHTML=hbar(Object.entries(stkAgg).sort((a,b)=>b[1]-a[1]).slice(0,12)
-    .map(([t,v])=>({t,v})), {unit:' ساعت', rowH:30, labelW:230});
+  logs.forEach(l=>{ const k=l.stakeholder? l.stakeholder.name_fa:'(بدون ذینفع)';
+    if(!stkAgg[k]) stkAgg[k]={hours:0,count:0};
+    stkAgg[k].hours+=Number(l.hours)||0; stkAgg[k].count+=countOf(l); });
+  const stkRows=Object.entries(stkAgg).sort((a,b)=>b[1].hours-a[1].hours).slice(0,12)
+    .map(([t,a])=>({t,v:a.hours,n:a.count}));
+  $('#chStk').innerHTML=hbar(stkRows, {unit:' ساعت', rowH:34, labelW:250});
 
   // ---- منابع ----
   const srcAgg={};
-  logs.forEach(l=>{ srcAgg[SRC_FA[l.source]||l.source]=(srcAgg[SRC_FA[l.source]||l.source]||0)+Number(l.hours); });
-  $('#chSrc').innerHTML=donut(Object.entries(srcAgg).sort((a,b)=>b[1]-a[1]).map(([t,v])=>({t,v})),
-    {center:fmt(hours), centerLabel:'نفرساعت'});
+  logs.forEach(l=>{ const k=SRC_FA[l.source]||l.source;
+    if(!srcAgg[k]) srcAgg[k]={hours:0,count:0};
+    srcAgg[k].hours+=Number(l.hours)||0; srcAgg[k].count+=countOf(l); });
+  $('#chSrc').innerHTML=donut(Object.entries(srcAgg).sort((a,b)=>b[1].hours-a[1].hours)
+    .map(([t,a])=>({t,v:a.hours,n:a.count})),
+    {center:fmt(hours), centerLabel:actLabel(events)});
+
+  printMetrics={hours,events,prevH,prevCount:prev.count,docs,people,mom,submitted,
+    eligible:rk.length,subPct,deptData,groups,portfolio,ve:Object.values(veAgg),act:actRows,stk:stkRows};
 
   if(state.role==='admin'&&!state.demo) renderTable(logs);
   if(state.role==='admin') renderMyRows();
@@ -466,12 +488,25 @@ const faNum=new Intl.NumberFormat('fa-IR',{maximumFractionDigits:2});
 const faN=n=>faNum.format(n);
 const asciiDigits=s=>s.replace(/[۰-۹٠-٩]/g,c=>String('۰۱۲۳۴۵۶۷۸۹'.includes(c)?'۰۱۲۳۴۵۶۷۸۹'.indexOf(c):'٠١٢٣٤٥٦٧٨٩'.indexOf(c)));
 
+/* ================= شمارش فعالیت‌ها در کنار نفرساعت ================= */
+/* هر ردیف گزارش (activity_log) یک فعالیت ثبت‌شده است؛ ردیف‌های خام جدول ادمین هر رویداد را جدا دارند. */
+const isEventRow=l=>l.event_count!=null;
+const countOf=r=>isEventRow(r)?Number(r.event_count)||0:1;
+function tally(rows){
+  let hours=0,count=0;
+  for(const r of rows){ hours+=Number(r.hours)||0; count+=countOf(r); }
+  return {hours,count};
+}
+/* متن کنار نفرساعت: «۸۴ فعالیت» */
+const actLabel=n=>`${faN(n)} فعالیت`;
+
 function renderPriorities(items,hours){
   const groups=QUADRANTS.map(q=>{
     const group=items.filter(p=>p.x>=1&&p.x<=7&&p.y>=1&&p.y<=7&&q.match(p.x,p.y)).sort((a,b)=>b.h-a.h);
-    return {...q,count:group.length,hours:group.reduce((s,p)=>s+p.h,0),leading:group.find(p=>p.h>0)?.t};
+    return {...q,count:group.length,hours:group.reduce((s,p)=>s+p.h,0),
+      events:group.reduce((s,p)=>s+(p.n||0),0),leading:group.find(p=>p.h>0)?.t};
   });
-  $('#priorityGrid').innerHTML=groups.map(q=>`<div class="priority-tile"><strong>${esc(q.t)}</strong><div class="measure">${faN(q.hours)} ساعت · ${faN(percent(q.hours,hours))}٪</div><small>${faN(q.count)} گروه فعالیت · ${esc(q.action)}</small>${q.leading?`<small>بیشترین بار: ${esc(q.leading)}</small>`:''}</div>`).join('');
+  $('#priorityGrid').innerHTML=groups.map(q=>`<div class="priority-tile"><strong>${esc(q.t)}</strong><div class="measure">${faN(q.hours)} ساعت · ${faN(percent(q.hours,hours))}٪</div><div class="measure-count">${faN(q.events)} فعالیت · ${faN(q.count)} گروه فعالیت</div><small>${esc(q.action)}</small>${q.leading?`<small>بیشترین بار: ${esc(q.leading)}</small>`:''}</div>`).join('');
   return groups;
 }
 
@@ -481,8 +516,8 @@ function portfolioForScope(){
   const rows=items.filter(x=>x.period_year*100+x.period_month===state.month&&(!state.dept||x.department===state.dept)&&(!state.person||String(x.employee_id)===state.person));
   const project=new Map(),stakeholder=new Map();
   const add=(map,id,name,dept,h,code)=>{
-    if(!map.has(id)) map.set(id,{id,name,hours:0,units:new Map(),code});
-    const a=map.get(id);a.hours+=h;a.units.set(dept,(a.units.get(dept)||0)+h);
+    if(!map.has(id)) map.set(id,{id,name,hours:0,events:0,units:new Map(),code});
+    const a=map.get(id);a.hours+=h;a.events+=1;a.units.set(dept,(a.units.get(dept)||0)+h);
   };
   let unassigned=0, unassignedStake=0;
   for(const r of rows){
@@ -491,43 +526,48 @@ function portfolioForScope(){
     add(project,r.project_id,r.project||'بدون پروژه',r.department,h,r.project_code);
     add(stakeholder,r.stakeholder_id,r.stakeholder||'بدون ذینفع',r.department,h);
   }
-  return {project:descending(project),stakeholder:descending(stakeholder),unassigned,unassignedStake,hours:sumHours(rows)};
+  return {project:descending(project),stakeholder:descending(stakeholder),unassigned,unassignedStake,hours:sumHours(rows),events:rows.length};
 }
 function renderPortfolio(p=portfolioForScope()){
   if(!p){ $('#portfolioSummary').textContent='';$('#portfolioTable').innerHTML=emptyBox('تحلیل بار کاری فعلاً در دسترس نیست.');return; }
   const project=$('#portfolioBy').value==='project',unassigned=project?p.unassigned:p.unassignedStake;
-  $('#portfolioSummary').innerHTML=`<span>کل بار: <b>${faN(p.hours)}</b> ساعت</span><span>${project?'بدون پروژه':'بدون ذینفع'}: <b>${faN(unassigned)}</b> ساعت (${faN(percent(unassigned,p.hours))}٪)</span><span>نمایش حداکثر ۱۰ مورد بر اساس نفرساعت</span>`;
+  $('#portfolioSummary').innerHTML=`<span>کل بار: <b>${faN(p.hours)}</b> ساعت · <b>${actLabel(p.events)}</b></span><span>${project?'بدون پروژه':'بدون ذینفع'}: <b>${faN(unassigned)}</b> ساعت (${faN(percent(unassigned,p.hours))}٪)</span><span>نمایش حداکثر ۱۰ مورد بر اساس نفرساعت</span>`;
   const rows=(project?p.project:p.stakeholder).slice(0,10);
   if(!rows.length){$('#portfolioTable').innerHTML=emptyBox('در این محدوده داده‌ای ثبت نشده است.');return;}
   const seg=r=>[...r.units.entries()].sort((a,b)=>b[1]-a[1]).slice(0,3).map(([d,h])=>`${esc(d)}: ${faN(h)}`).join('، ');
-  $('#portfolioTable').innerHTML=`<table><thead><tr><th>${project?'پروژه':'ذینفع'}</th><th>نفرساعت</th><th>سهم از کل</th><th>واحدهای دارای بیشترین بار (تا ۳ واحد)</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}${r.code?` <span class="hint" dir="auto">(${esc(r.code)})</span>`:''}</td><td>${faN(r.hours)}</td><td>${faN(percent(r.hours,p.hours))}٪</td><td>${seg(r)}</td></tr>`).join('')}</tbody></table>`;
+  $('#portfolioTable').innerHTML=`<table><thead><tr><th>${project?'پروژه':'ذینفع'}</th><th>نفرساعت</th><th>تعداد فعالیت</th><th>سهم از کل</th><th>واحدهای دارای بیشترین بار (تا ۳ واحد)</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}${r.code?` <span class="hint" dir="auto">(${esc(r.code)})</span>`:''}</td><td>${faN(r.hours)}</td><td>${faN(r.events)}</td><td>${faN(percent(r.hours,p.hours))}٪</td><td>${seg(r)}</td></tr>`).join('')}</tbody></table>`;
 }
 
 let printMetrics=null;
 function printReport(){
   if(!['admin','management'].includes(state.role)||state.tab!=='dash'||!printMetrics) return;
-  const {hours,docs,people,mom,submitted,eligible,subPct,deptData,groups,portfolio}=printMetrics;
+  const {hours,events,prevH,prevCount,docs,people,mom,submitted,eligible,subPct,deptData,groups,portfolio,ve,act,stk}=printMetrics;
   const p=$('#printReport');
   const noData=!filtered(true).length;
   const person=state.person?dashboardData().personnel.find(x=>String(x.id)===state.person)?.name_en:null;
   const source=state.demo?(state.month===140506?'شهریور واقعی در نمای آزمایشی؛ مقایسهٔ رشد با مرداد ساختگی است.':'دادهٔ ماه انتخابی ساختگی است؛ برای ارزیابی افراد استفاده نشود.'):'داده‌های واقعی';
   const months=$('#fMonth').selectedOptions[0]?.textContent||'—';
-  const pairs=[['نفرساعت',faN(hours)],['رشد ماهانه',mom===null?'—':`${faN(mom)}٪`],['افراد دارای فعالیت',faN(people)],['مدرک یا موضوع',faN(docs)],['گزارش‌دهی',eligible?`${faN(subPct)}٪`:'—']];
-  const cut=s=>esc(trunc(s,70)), list=(rows,name,h)=>rows.slice(0,5).map(r=>`<tr><td>${cut(name(r))}</td><td>${faN(h(r))}</td></tr>`).join('');
-  const table=(title,rows)=>`<section><h2>${title}</h2>${rows?`<table><thead><tr><th>عنوان</th><th>نفرساعت</th></tr></thead><tbody>${rows}</tbody></table>`:'<p>داده‌ای برای نمایش نیست.</p>'}</section>`;
+  const pairs=[['نفرساعت',faN(hours)],['تعداد فعالیت',faN(events)],
+    ['رشد ماهانه',mom===null?'—':`${faN(mom)}٪`],['افراد دارای فعالیت',faN(people)],
+    ['مدرک یا موضوع',faN(docs)],['گزارش‌دهی',eligible?`${faN(subPct)}٪`:'—']];
+  const cut=s=>esc(trunc(s,70));
+  const list=(rows,name,v,n)=>rows.slice(0,5).map(r=>`<tr><td>${cut(name(r))}</td><td>${faN(v(r))}</td><td>${n?faN(n(r)):'—'}</td></tr>`).join('');
+  const table=(title,rows)=>`<section><h2>${title}</h2>${rows?`<table><thead><tr><th>عنوان</th><th>نفرساعت</th><th>تعداد فعالیت</th></tr></thead><tbody>${rows}</tbody></table>`:'<p>داده‌ای برای نمایش نیست.</p>'}</section>`;
   const summary=[];
   if(eligible&&submitted<eligible) summary.push(`${faN(eligible-submitted)} نفر از فهرست فعال در این محدوده گزارش نهایی ندارند.`);
   if(portfolio?.unassigned>0) summary.push(`${faN(portfolio.unassigned)} نفرساعت بدون پروژهٔ مشخص ثبت شده است (${faN(percent(portfolio.unassigned,portfolio.hours))}٪).`);
   const leadingStake=portfolio?.stakeholder.find(r=>r.id!=null&&r.hours>0);
-  if(leadingStake) summary.push(`ذینفع با بیشترین بار: ${trunc(leadingStake.name,70)}، ${faN(leadingStake.hours)} نفرساعت.`);
-  if(groups[2].hours>0) summary.push(`${faN(groups[2].hours)} نفرساعت در گروه «ارزش پایین، تلاش بالا» است؛ برای بازبینی فرایند بررسی شود.`);
+  if(leadingStake) summary.push(`ذینفع با بیشترین بار: ${trunc(leadingStake.name,70)}، ${faN(leadingStake.hours)} نفرساعت در ${actLabel(leadingStake.events)}.`);
+  if(groups[2].hours>0) summary.push(`${faN(groups[2].hours)} نفرساعت و ${faN(groups[2].events)} فعالیت در گروه «ارزش پایین، تلاش بالا» است؛ برای بازبینی فرایند بررسی شود.`);
   if(!summary.length) summary.push(noData?'در محدودهٔ انتخابی فعالیتی برای تحلیل وجود ندارد.':'بر اساس شاخص‌های این خلاصه، مورد خاصی برای پیگیری علامت نخورده است.');
   p.innerHTML=`<header><h1>گزارش مدیریتی عملکرد معاونت مهندسی</h1><p class="print-meta">دوره: ${esc(months)} · واحد: ${esc(state.dept||'همه')} · کارشناس: ${esc(person||'همه')}</p><p class="print-meta">نوع داده: ${esc(source)} · تاریخ تهیه: ${esc(new Intl.DateTimeFormat('fa-IR-u-ca-persian').format(new Date()))}</p></header>`+
     (state.demo?'<p class="print-alert">نمای آزمایشی — این گزارش مبنای ارزیابی عملکرد نیست.</p>':'')+
     `<section class="print-kpis">${pairs.map(([k,v])=>`<div><strong>${esc(v)}</strong>${esc(k)}</div>`).join('')}</section>`+
-    `<section><h2>اولویت ارزش و تلاش</h2><ul>${groups.map(q=>`<li>${esc(q.t)}: ${faN(q.hours)} نفرساعت (${faN(percent(q.hours,hours))}٪)</li>`).join('')}</ul></section>`+
-    `<div class="print-grid">${table('واحدهای دارای بیشترین بار',list(deptData,r=>r.t,r=>r.v))}${table('پروژه‌های دارای بیشترین بار',list((portfolio?.project||[]).filter(r=>r.id!=null),r=>r.name,r=>r.hours))}</div>`+
-    `<section><h2>موارد قابل پیگیری</h2><ul>${summary.map(t=>`<li>• ${esc(t)}</li>`).join('')}</ul></section><small>گزارش‌های نهایی: ${faN(submitted)} از ${faN(eligible)} نفر فعال.${state.role==='admin'&&!state.demo?' نمای ادمین ممکن است شامل پیش‌نویس‌ها باشد.':''} نفرساعت، حجم کار ثبت‌شده است و به‌تنهایی معیار کیفیت نیست.</small>`;
+    (prevH?`<p class="print-meta">ماه قبل: ${faN(prevH)} نفرساعت · ${actLabel(prevCount)}</p>`:'')+
+    `<section><h2>اولویت ارزش و تلاش</h2><ul>${groups.map(q=>`<li>${esc(q.t)}: ${faN(q.hours)} نفرساعت · ${actLabel(q.events)} (${faN(percent(q.hours,hours))}٪)</li>`).join('')}</ul></section>`+
+    `<div class="print-grid">${table('واحدهای دارای بیشترین بار',list(deptData,r=>r.t,r=>r.v,r=>r.n))}${table('پروژه‌های دارای بیشترین بار',list((portfolio?.project||[]).filter(r=>r.id!=null),r=>r.name,r=>r.hours,r=>r.events))}</div>`+
+    `<div class="print-grid">${table('فعالیت‌های دارای بیشترین نفرساعت',list(act,r=>r.t,r=>r.v,r=>r.n))}${table('ذینفعان دارای بیشترین نفرساعت',list(stk,r=>r.t,r=>r.v,r=>r.n))}</div>`+
+    `<section><h2>موارد قابل پیگیری</h2><ul>${summary.map(t=>`<li>• ${esc(t)}</li>`).join('')}</ul></section><small>گزارش‌های نهایی: ${faN(submitted)} از ${faN(eligible)} نفر فعال.${state.role==='admin'&&!state.demo?' نمای ادمین ممکن است شامل پیش‌نویس‌ها باشد.':''} نفرساعت، حجم کار ثبت‌شده است و به‌تنهایی معیار کیفیت نیست؛ تعداد فعالیت در کنار آن، حجم رخدادهای ثبت‌شده را نشان می‌دهد.</small>`;
   p.dataset.ready='true';
   window.print();
 }
@@ -548,7 +588,10 @@ function renderTable(logs){
        `<td><b>${fmt(l.hours)}</b></td><td>${fmt(l.doc_count)}</td>`+
        `<td class="ltr">${esc(l.letter_date||'—')}</td><td class="quality-note">${esc(l.quality_reason||'—')}</td></tr>`;
   });
-  $('#tblWrap').innerHTML=h+`</table><div class="hint" style="margin-top:8px">نمایش ${rows.length} از ${logs.length} ردیف</div>`;
+  const t=tally(logs);
+  h+=`</table><div class="tbl-total"><span>جمع این فیلتر: <b>${faN(t.hours)}</b> نفرساعت · <b>${actLabel(t.count)}</b></span>`+
+     `<span>نمایش ${faN(rows.length)} از ${faN(logs.length)} ردیف</span></div>`;
+  $('#tblWrap').innerHTML=h;
 }
 
 /* ================= فرم ورود ================= */
@@ -687,7 +730,9 @@ function renderMyRows(){
     h+=`<tr><td>${esc(SRC_FA[l.source]||l.source)}</td><td>${esc(l.activity?.specific_title||l.activity?.general_fa||'—')}</td><td>${esc(l.stakeholder?.name_fa||'—')}</td><td>${fmt(l.hours)}</td><td>${fmt(l.doc_count)}</td><td class="ltr">${esc(l.letter_date||'—')}</td>`+
       `<td>${editable?`<button class="ghost" data-edit="${i}">ویرایش</button><button class="del" data-delete="${i}">حذف</button>`:''}</td></tr>`;
   });
-  $('#myRows').innerHTML=h+'</table>';
+  const t=tally(rows);
+  h+=`</table><div class="row-total">جمع این ماه: <b>${faN(t.hours)}</b> نفرساعت · <b>${actLabel(t.count)}</b> · ${faN(rows.length)} ردیف ثبت‌شده</div>`;
+  $('#myRows').innerHTML=h;
   $('#myRows').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editEntry(rows[b.dataset.edit]));
   $('#myRows').querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>{
     if(confirm('این فعالیت حذف شود؟')) runReport('delete',{p_id:rows[b.dataset.delete].id},'فعالیت حذف شد.');
@@ -835,11 +880,11 @@ function resetUi(){
   $('#catForm').reset();$('#catKind').value='personnel';$('#catStatus').value='all';$('#catSearch').value='';setCatalogFields();
   if($('#qualityDialog').open) $('#qualityDialog').close();
   printMetrics=null;$('#printReport').removeAttribute('data-ready');$('#printReport').textContent='';
-  for(const i of ['#priorityGrid','#portfolioSummary','#portfolioTable']) $(i).textContent='';
+  for(const i of ['#priorityGrid','#portfolioSummary','#portfolioTable','#kpiHoursC']) $(i).textContent='';
   updateDemoUi();
   $('#demoMsg').textContent='';
   for(const sel of ['#tblWrap','#myRows','#loadState','#whoami','#eMsg','#roleMsg','#reportState']) $(sel).textContent='';
-  document.querySelectorAll('.chart,.kpi-v,.kpi-d').forEach(el=>el.textContent='');
+  document.querySelectorAll('.chart,.kpi-v,.kpi-d,.kpi-count').forEach(el=>el.textContent='');
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));
   for(const s of ['#eHours','#eDocs','#eDay','#eMon','#eYearD','#eNotes']) $(s).value='';
   $('#eSource').value='pargar';

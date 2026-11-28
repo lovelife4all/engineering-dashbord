@@ -345,6 +345,18 @@ select:focus,input:focus,textarea:focus{
   line-height:1.25;
 }
 .kpi-l{font-size:13px;font-weight:700;color:var(--ink-soft);margin-top:4px}
+.kpi-count{
+  display:inline-block;
+  margin-top:6px;
+  padding:2px 10px;
+  border-radius:999px;
+  background:#eef6ff;
+  border:1px solid #c7ddff;
+  color:#1c4ba8;
+  font-size:12px;
+  font-weight:700;
+  line-height:1.6;
+}
 .kpi-d{font-size:12px;margin-top:6px;font-weight:400;color:var(--muted);line-height:1.5}
 .up{color:#059669;font-weight:700}
 .down{color:#dc2626;font-weight:700}
@@ -439,6 +451,19 @@ select:focus,input:focus,textarea:focus{
   color:var(--ink);
   line-height:1;
 }
+.hbar-count{
+  flex:0 0 auto;
+  white-space:nowrap;
+  font-size:11.5px;
+  font-weight:700;
+  color:#1c4ba8;
+  background:#eef6ff;
+  border:1px solid #c7ddff;
+  border-radius:999px;
+  padding:2px 8px;
+  line-height:1.5;
+}
+.hbar-list.has-count{--hbar-val-reserve:206px}
 
 /* ===== نمودار دایره‌ای (دونات) و راهنمای خوانا ===== */
 .donut-wrap{
@@ -486,6 +511,14 @@ select:focus,input:focus,textarea:focus{
   flex:0 0 auto;
 }
 .donut-meta b{color:var(--ink);font-weight:700}
+.donut-count{
+  display:block;
+  margin-top:2px;
+  font-size:11px;
+  font-weight:700;
+  color:#1c4ba8;
+  text-align:left;
+}
 
 /* ===== form ===== */
 .formcard{max-width:1080px;margin:0 auto}
@@ -678,6 +711,11 @@ body[data-bg="energy"] .auth-screen{
   .card{padding:14px;border-radius:14px}
   .card h3{font-size:14px;margin-bottom:10px;padding-bottom:8px}
   .hbar-row{grid-template-columns:1fr;gap:5px;padding:4px 2px}
+  .hbar-list,.hbar-list.has-count{--hbar-val-reserve:170px}
+  .hbar-track{flex-wrap:wrap}
+  .hbar-count{font-size:10.5px;padding:1px 7px}
+  .kpi-count{font-size:11px;padding:1px 8px}
+  .tbl-total,.row-total{font-size:11.5px;gap:6px 12px}
   .donut-legend{grid-template-columns:1fr}
   .catalog-toolbar input{min-width:0;width:100%}
   .catalog-toolbar label{width:100%}
@@ -690,7 +728,7 @@ body[data-bg="energy"] .auth-screen{
 }
 
 @media(max-width:480px){
-  .hbar-list{--hbar-val-reserve:86px}
+  .hbar-list,.hbar-list.has-count{--hbar-val-reserve:150px}
   .hbar-val{font-size:11.5px}
   .filters{grid-template-columns:1fr}
   .filters label:nth-child(3){grid-column:auto}
@@ -748,7 +786,23 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .priority-tile:nth-child(4){border-right-color:#64748b;background:#f8fafc}
 .priority-tile strong{display:block;font-size:13.5px;color:var(--ink)}
 .priority-tile .measure{font-weight:700;font-size:16px;color:var(--ink);margin:5px 0}
+.priority-tile .measure-count{display:inline-block;padding:2px 9px;margin-bottom:4px;border-radius:999px;background:#eef6ff;border:1px solid #c7ddff;font-size:11.5px;font-weight:700;color:#1c4ba8}
 .priority-tile small{display:block;color:var(--muted);line-height:1.55}
+
+/* جمع نفرساعت و تعداد فعالیت در جدول‌ها */
+.tbl-total,.row-total{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 18px;
+  margin-top:10px;
+  padding:9px 12px;
+  border-radius:10px;
+  background:#f8fafc;
+  border:1px solid var(--line);
+  color:var(--ink-soft);
+  font-size:12.5px;
+}
+.tbl-total b,.row-total b{color:var(--ink)}
 
 .portfolio-summary{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
 .portfolio-summary span{padding:6px 11px;border-radius:9px;background:#eff6ff;border:1px solid #dbeafe;color:var(--ink-soft);font-size:12.5px}
@@ -768,7 +822,7 @@ textarea{width:100%;font:inherit;border:1px solid var(--line-strong);border-radi
   .print-report header{border-bottom:2px solid #1d5b86;padding-bottom:8px;margin-bottom:10px}
   .print-report h1{font-size:18pt;margin:0 0 3px}.print-report h2{font-size:11pt;margin:12px 0 4px}
   .print-report .print-meta{color:#36495a;font-size:9pt}.print-report .print-alert{border:1px solid #b8874f;padding:5px 8px;margin:7px 0;font-weight:700}
-  .print-report .print-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}
+  .print-report .print-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px}
   .print-report .print-kpis div{padding:5px 6px;border:1px solid #b6c5d1;font-size:8pt}
   .print-report .print-kpis strong{display:block;font-size:11pt}
   .print-report .print-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
