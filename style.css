@@ -760,6 +760,19 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .data-mode[data-demo="true"] p{color:#854d0e}
 .data-mode[data-demo="true"] .ghost{color:#713f12;border-color:#a16207;background:#fffbeb}
 
+/* رییس دپارتمان: یادداشت محدودهٔ واحد */
+#appRoot.force-password>*:not(#passwordDialog){visibility:hidden!important;}
+.scope-note{
+  margin:16px 22px 0;padding:12px 18px;
+  border:1px solid #bfdbfe;border-right:4px solid #1d5bd8;border-radius:var(--r);
+  background:#eff6ff;color:#1e3a8a;
+}
+.scope-note strong{display:block;font-size:13px;margin-bottom:3px}
+.scope-note p{font-size:12px;line-height:1.7;color:#1e40af}
+@media(max-width:640px){
+  .scope-note{margin:10px 12px 0;padding:10px 14px}
+}
+
 /* management insights, catalog and browser print */
 .card.c3{grid-column:1/-1}
 .section-head,.catalog-toolbar{display:flex;justify-content:space-between;gap:12px;align-items:end;flex-wrap:wrap}
