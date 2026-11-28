@@ -239,7 +239,7 @@
 }
 .management-trend-panel .chart:not(:last-of-type) { margin-block-end: 12px; }
 
-/* The Bale entry serves the existing report form in an embedded browser. */
+/* The Bale entry serves the dashboard in an embedded browser. */
 body[data-entry="bale"] .auth-screen {
   align-items: center;
   padding-inline: 14px;
@@ -253,6 +253,6 @@ body[data-entry="bale"] .auth-screen {
 body[data-entry="bale"] .topbar {
   position: static;
 }
-body[data-entry="bale"] .topbar nav {
+body[data-entry="bale"] .topbar nav.single-tab {
   display: none;
 }

@@ -1408,7 +1408,7 @@ function selectTab(tab){
 async function startApp(){
   resetUi();
   if(baleEntry && await rpc('kpi_bale_pilot_access') !== true){
-    throw new Error('ورود از بله برای حساب کارشناسان فعال واحدهای مهندسی در دسترس است.');
+    throw new Error('این حساب به داشبورد مهندسی در بله دسترسی ندارد. با ادمین سامانه تماس بگیرید.');
   }
   const access=await rpc('kpi_access');
   if(access?.must_change_password){
@@ -1473,9 +1473,9 @@ function resetUi(){
 document.addEventListener('DOMContentLoaded', ()=>{
   if(baleEntry){
     document.body.dataset.entry='bale';
-    document.title='ثبت گزارش مهندسی در بله';
-    $('#authTitle').textContent='ثبت گزارش مهندسی در بله';
-    $('#appTitle').textContent='ثبت گزارش مهندسی';
+    document.title='داشبورد مهندسی در بله';
+    $('#authTitle').textContent='داشبورد مهندسی در بله';
+    $('#appTitle').textContent='داشبورد مهندسی';
     $('#baleEntryInfo').hidden=false;
   }
   document.querySelectorAll('[data-chart-view]').forEach(select=>{
